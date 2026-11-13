@@ -398,6 +398,9 @@ export default function WorkerPage() {
             {activeSection === "home" && (
               <Home
                 refreshKey={refreshKey}
+                onOpenAssignments={() =>
+                  changeSection("assignments")
+                }
               />
             )}
 

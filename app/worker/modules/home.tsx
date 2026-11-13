@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Incident = {
@@ -29,78 +29,8 @@ type Barangay = {
 
 type HomeProps = {
   refreshKey: number;
+  onOpenAssignments?: () => void;
 };
-
-// Counts up from 0 to `value` when the number scrolls into view
-// (same behavior as the admin dashboard).
-function CountUp({
-  value,
-  duration = 1100,
-}: {
-  value: number;
-  duration?: number;
-}) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const [display, setDisplay] = useState(0);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
-
-    if (reduceMotion || typeof IntersectionObserver === "undefined") {
-      setDisplay(value);
-      return;
-    }
-
-    let frame = 0;
-
-    const play = () => {
-      cancelAnimationFrame(frame);
-      const start = performance.now();
-
-      const tick = (now: number) => {
-        const progress = Math.min((now - start) / duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3); // ease-out
-        setDisplay(Math.round(value * eased));
-
-        if (progress < 1) frame = requestAnimationFrame(tick);
-      };
-
-      frame = requestAnimationFrame(tick);
-    };
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            play();
-          } else {
-            cancelAnimationFrame(frame);
-            setDisplay(0);
-          }
-        });
-      },
-      { threshold: 0.4 }
-    );
-
-    observer.observe(element);
-
-    return () => {
-      observer.disconnect();
-      cancelAnimationFrame(frame);
-    };
-  }, [value, duration]);
-
-  return (
-    <span ref={ref} className="tabular-nums">
-      {display}
-    </span>
-  );
-}
 
 // Same card structure as the admin dashboard summary cards.
 function SummaryCard({
@@ -108,13 +38,11 @@ function SummaryCard({
   value,
   description,
   color,
-  percent,
 }: {
   label: string;
   value: number;
   description: string;
   color: "red" | "yellow" | "green" | "blue";
-  percent?: number;
 }) {
   const accents = {
     red: "bg-red-600",
@@ -130,18 +58,10 @@ function SummaryCard({
         className={`absolute inset-x-0 top-0 h-0.5 ${accents[color]}`}
       />
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-bold text-slate-800">{label}</p>
+      <p className="text-sm font-bold text-slate-800">{label}</p>
 
-        {percent !== undefined && (
-          <span className="text-xs font-semibold text-slate-500">
-            <CountUp value={percent} />%
-          </span>
-        )}
-      </div>
-
-      <p className="mt-3 text-3xl font-bold text-slate-900 sm:mt-4 sm:text-4xl">
-        <CountUp value={value} />
+      <p className="mt-3 text-3xl font-bold tabular-nums text-slate-900 sm:mt-4 sm:text-4xl">
+        {value}
       </p>
 
       <p className="mt-2 text-xs text-slate-500 sm:text-sm">
@@ -185,6 +105,7 @@ function Panel({
 
 export default function Home({
   refreshKey,
+  onOpenAssignments,
 }: HomeProps) {
   const [deployments, setDeployments] =
     useState<Deployment[]>([]);
@@ -446,11 +367,6 @@ export default function Home({
   const totalAssignments =
     deployments.length;
 
-  const percent = (count: number) =>
-    totalAssignments > 0
-      ? Math.round((count / totalAssignments) * 100)
-      : 0;
-
   // =========================
   // ACTIVE INCIDENTS
   // =========================
@@ -655,7 +571,6 @@ export default function Home({
             value={criticalCount}
             description="Requires immediate attention"
             color="red"
-            percent={percent(criticalCount)}
           />
 
           <SummaryCard
@@ -663,7 +578,6 @@ export default function Home({
             value={monitoringCount}
             description="Incidents under monitoring"
             color="yellow"
-            percent={percent(monitoringCount)}
           />
 
           <SummaryCard
@@ -671,7 +585,6 @@ export default function Home({
             value={resolvedCount}
             description="Completed assignments"
             color="green"
-            percent={percent(resolvedCount)}
           />
 
           <SummaryCard
@@ -734,9 +647,11 @@ export default function Home({
                     );
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={deployment.id}
-                      className={`border border-l-4 border-slate-300 bg-white p-4 ${status.border}`}
+                      onClick={onOpenAssignments}
+                      className={`w-full border border-l-4 border-slate-300 bg-white p-4 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#123D73]/30 ${status.border}`}
                     >
 
                       <div className="flex items-start justify-between gap-3">
@@ -787,7 +702,7 @@ export default function Home({
 
                       </div>
 
-                    </div>
+                    </button>
                   );
                 })}
 
@@ -798,7 +713,14 @@ export default function Home({
             {activeDeployments.length > 5 && (
               <p className="mt-4 border-t border-slate-200 pt-4 text-center text-sm text-slate-500">
                 Showing 5 of {activeDeployments.length} active
-                incidents. See all in Assignments.
+                incidents.{" "}
+                <button
+                  type="button"
+                  onClick={onOpenAssignments}
+                  className="font-semibold text-[#123D73] underline underline-offset-2"
+                >
+                  See all in Assignments
+                </button>
               </p>
             )}
 
