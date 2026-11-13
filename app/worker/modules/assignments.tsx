@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 // =========================
 // SKELETON LOADING
@@ -53,6 +53,7 @@ type Barangay = {
 // Exported so the parent page can use the same type.
 export type Filter =
   | "all"
+  | "todo"
   | "assigned"
   | "ongoing"
   | "resolved"
@@ -123,7 +124,7 @@ function AssignmentCardSkeleton() {
 
 export default function Assignments({
   refreshKey,
-  initialFilter = "all",
+  initialFilter = "todo",
   onSelectAssignment,
 }: AssignmentsProps) {
 
@@ -142,7 +143,19 @@ export default function Assignments({
   const [errorMessage, setErrorMessage] =
     useState("");
 
+  // Pagination
+  const [page, setPage] =
+    useState(1);
+
+  const listTopRef =
+    useRef<HTMLDivElement>(null);
+
   const supabase = createClient();
+
+  // Go back to page 1 whenever the filter changes.
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
 
   // =========================
   // LOAD ASSIGNMENTS
@@ -424,6 +437,18 @@ export default function Assignments({
     );
   }
 
+  // Still needs work: not resolved, and the incident
+  // is not already marked resolved (green).
+  function isTodo(
+    deploymentStatus: string,
+    incidentStatus: string
+  ) {
+    return (
+      deploymentStatus !== "resolved" &&
+      incidentStatus !== "green"
+    );
+  }
+
   function isAssigned(status: string) {
     return (
       !isOngoing(status) &&
@@ -448,6 +473,14 @@ export default function Assignments({
 
         if (filter === "all") {
           return true;
+        }
+
+        // To do = work that still needs to be done
+        if (filter === "todo") {
+          return isTodo(
+            deployment.status,
+            incident.status
+          );
         }
 
         // Progress filters (based on the team's own progress)
@@ -490,6 +523,14 @@ export default function Assignments({
   const counts = {
     all: withIncident.length,
 
+    todo: withIncident.filter(
+      (deployment) =>
+        isTodo(
+          deployment.status,
+          deployment.incidents?.status ?? ""
+        )
+    ).length,
+
     assigned: withIncident.filter(
       (deployment) =>
         isAssigned(deployment.status)
@@ -527,14 +568,9 @@ export default function Assignments({
     count: number;
   }[] = [
     {
-      value: "all",
-      label: "All assignments",
-      count: counts.all,
-    },
-    {
-      value: "assigned",
-      label: "Assigned",
-      count: counts.assigned,
+      value: "todo",
+      label: "To do",
+      count: counts.todo,
     },
     {
       value: "ongoing",
@@ -542,21 +578,106 @@ export default function Assignments({
       count: counts.ongoing,
     },
     {
+      value: "assigned",
+      label: "Assigned",
+      count: counts.assigned,
+    },
+    {
       value: "resolved",
       label: "Resolved",
       count: counts.resolved,
     },
+  ];
+
+  // Smaller chips under the cards: filter by incident status.
+  const incidentChips: {
+    value: Filter;
+    label: string;
+    count: number;
+    dot: string;
+  }[] = [
     {
       value: "red",
-      label: "Incident: Active",
+      label: "Active",
       count: counts.red,
+      dot: "bg-red-600",
     },
     {
       value: "yellow",
-      label: "Incident: Monitoring",
+      label: "Monitoring",
       count: counts.yellow,
+      dot: "bg-amber-500",
     },
   ];
+
+  // =========================
+  // SORT (most urgent first)
+  // Ongoing, then Assigned, then Resolved.
+  // Inside each group: Active incidents first.
+  // =========================
+
+  function progressRank(status: string) {
+    if (isOngoing(status)) return 0;
+    if (status === "resolved") return 2;
+    return 1;
+  }
+
+  function incidentRank(status: string) {
+    if (status === "red") return 0;
+    if (status === "yellow") return 1;
+    return 2;
+  }
+
+  const sortedDeployments = [
+    ...filteredDeployments,
+  ].sort((a, b) => {
+    const byProgress =
+      progressRank(a.status) -
+      progressRank(b.status);
+
+    if (byProgress !== 0) return byProgress;
+
+    return (
+      incidentRank(a.incidents?.status ?? "") -
+      incidentRank(b.incidents?.status ?? "")
+    );
+  });
+
+  // =========================
+  // PAGINATION (6 per page)
+  // =========================
+
+  const PAGE_SIZE = 6;
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      sortedDeployments.length / PAGE_SIZE
+    )
+  );
+
+  const currentPage = Math.min(
+    page,
+    totalPages
+  );
+
+  const pageStart =
+    (currentPage - 1) * PAGE_SIZE;
+
+  const pagedDeployments =
+    sortedDeployments.slice(
+      pageStart,
+      pageStart + PAGE_SIZE
+    );
+
+  function goToPage(next: number) {
+    setPage(next);
+
+    listTopRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
 
   // =========================
   // ERROR
@@ -660,7 +781,7 @@ export default function Assignments({
 
         {/* STATUS SUMMARY (also works as the filter) */}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 xl:grid-cols-4">
 
           {statCards.map((card) => {
             const active = filter === card.value;
@@ -696,23 +817,87 @@ export default function Assignments({
 
         </div>
 
+        {/* INCIDENT STATUS CHIPS (tap again to clear) */}
+
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+
+          <span className="text-sm font-semibold text-slate-600">
+            Incident status:
+          </span>
+
+          {incidentChips.map((chip) => {
+            const active = filter === chip.value;
+
+            return (
+              <button
+                key={chip.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() =>
+                  setFilter(
+                    active ? "todo" : chip.value
+                  )
+                }
+                className={`inline-flex min-h-11 items-center gap-2 rounded-none border px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-[#123D73]/30 ${
+                  active
+                    ? "border-[#123D73] bg-blue-50 text-[#123D73]"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`h-2 w-2 rounded-full ${chip.dot}`}
+                />
+                {chip.label}
+                <span className="text-slate-500">
+                  {showSkeleton ? "–" : chip.count}
+                </span>
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            aria-pressed={filter === "all"}
+            onClick={() =>
+              setFilter(
+                filter === "all" ? "todo" : "all"
+              )
+            }
+            className={`inline-flex min-h-11 items-center gap-2 rounded-none border px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-[#123D73]/30 sm:ml-auto ${
+              filter === "all"
+                ? "border-[#123D73] bg-blue-50 text-[#123D73]"
+                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            Show all
+            <span className="text-slate-500">
+              {showSkeleton ? "–" : counts.all}
+            </span>
+          </button>
+
+        </div>
+
         {/* ASSIGNMENTS */}
 
         <Panel
           title="Assigned Incidents"
-          description="Newest assignments first"
+          description="Ongoing first, then the newest assignments"
           rightLabel={
             showSkeleton
               ? "Loading..."
-              : `${filteredDeployments.length} ${
-                  filteredDeployments.length === 1
-                    ? "assignment"
-                    : "assignments"
-                } shown`
+              : sortedDeployments.length === 0
+                ? "0 assignments"
+                : `${pageStart + 1}–${
+                    pageStart + pagedDeployments.length
+                  } of ${sortedDeployments.length}`
           }
         >
 
-          <div className="p-4 sm:p-6">
+          <div
+            ref={listTopRef}
+            className="scroll-mt-28 p-4 sm:p-6"
+          >
 
             {/* LOADING */}
 
@@ -763,7 +948,7 @@ export default function Assignments({
             {!showSkeleton && (
             <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
 
-              {filteredDeployments.map(
+              {pagedDeployments.map(
                 (deployment) => {
 
                   const incident =
@@ -885,6 +1070,44 @@ export default function Assignments({
               )}
 
             </div>
+            )}
+
+            {/* PAGINATION */}
+
+            {!showSkeleton && totalPages > 1 && (
+              <nav
+                aria-label="Assignments pages"
+                className="mt-5 flex items-center justify-between gap-3 border-t border-slate-200 pt-4"
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    goToPage(currentPage - 1)
+                  }
+                  disabled={currentPage === 1}
+                  className="min-h-11 rounded-none border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-[#123D73] transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-white"
+                >
+                  Previous
+                </button>
+
+                <p
+                  className="text-sm font-medium text-slate-600"
+                  aria-live="polite"
+                >
+                  Page {currentPage} of {totalPages}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    goToPage(currentPage + 1)
+                  }
+                  disabled={currentPage === totalPages}
+                  className="min-h-11 rounded-none border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-[#123D73] transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-white"
+                >
+                  Next
+                </button>
+              </nav>
             )}
 
           </div>

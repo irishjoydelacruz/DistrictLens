@@ -312,7 +312,7 @@ export default function WorkerPage() {
   // Filter that the Assignments tab opens with
   // (e.g. "resolved" when coming from the Team tab).
   const [assignmentsFilter, setAssignmentsFilter] =
-    useState<Filter>("all");
+    useState<Filter>("todo");
 
   // Used to tell each module:
   // "refresh your data"
@@ -330,10 +330,11 @@ export default function WorkerPage() {
     });
   }, [activeSection, refreshKey]);
 
-  // The filter resets to "all" unless one is passed in.
+  // The filter resets to "todo" (work that still needs doing)
+  // unless one is passed in.
   function changeSection(
     section: string,
-    filter: Filter = "all"
+    filter: Filter = "todo"
   ) {
     setAssignmentsFilter(filter);
     setActiveSection(section);
@@ -460,7 +461,7 @@ export default function WorkerPage() {
                 onOpenAssignments={(filter) =>
                   changeSection(
                     "assignments",
-                    filter ?? "all"
+                    filter ?? "todo"
                   )
                 }
               />

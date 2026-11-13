@@ -53,6 +53,7 @@ type Counts = {
 // Same values as the filter cards in the Assignments tab.
 type AssignmentFilter =
   | "all"
+  | "todo"
   | "assigned"
   | "ongoing"
   | "resolved"
