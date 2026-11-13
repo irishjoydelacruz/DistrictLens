@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import Authentication from "./authentication";
 
 import Home from "./modules/home";
-import Assignments from "./modules/assignments";
+import Assignments, { type Filter } from "./modules/assignments";
 import IncidentDetails from "./modules/incident-details";
 import Notifications from "./modules/notifications";
 import Team from "./modules/team";
@@ -309,12 +309,33 @@ export default function WorkerPage() {
   const [selectedDeployment, setSelectedDeployment] =
     useState<any>(null);
 
+  // Filter that the Assignments tab opens with
+  // (e.g. "resolved" when coming from the Team tab).
+  const [assignmentsFilter, setAssignmentsFilter] =
+    useState<Filter>("all");
+
   // Used to tell each module:
   // "refresh your data"
   const [refreshKey, setRefreshKey] =
     useState(0);
 
-  function changeSection(section: string) {
+  // Always start at the top when the section changes
+  // (also runs when the same tab is tapped again,
+  // because refreshKey changes every time).
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "instant" as ScrollBehavior,
+    });
+  }, [activeSection, refreshKey]);
+
+  // The filter resets to "all" unless one is passed in.
+  function changeSection(
+    section: string,
+    filter: Filter = "all"
+  ) {
+    setAssignmentsFilter(filter);
     setActiveSection(section);
 
     // Trigger a refresh when changing section
@@ -328,9 +349,11 @@ export default function WorkerPage() {
     setActiveSection("incident-details");
   }
 
+  // Going back from Incident Details keeps the current filter.
   function backToAssignments() {
     setSelectedDeployment(null);
-    changeSection("assignments");
+    setActiveSection("assignments");
+    setRefreshKey((previous) => previous + 1);
   }
 
   // Incident details belongs to the Assignments tab.
@@ -401,6 +424,9 @@ export default function WorkerPage() {
                 onOpenAssignments={() =>
                   changeSection("assignments")
                 }
+                onSelectAssignment={
+                  openIncidentDetails
+                }
               />
             )}
 
@@ -408,6 +434,7 @@ export default function WorkerPage() {
             {activeSection === "assignments" && (
               <Assignments
                 refreshKey={refreshKey}
+                initialFilter={assignmentsFilter}
                 onSelectAssignment={
                   openIncidentDetails
                 }
@@ -429,7 +456,14 @@ export default function WorkerPage() {
 
             {/* TEAM */}
             {activeSection === "team" && (
-              <Team />
+              <Team
+                onOpenAssignments={(filter) =>
+                  changeSection(
+                    "assignments",
+                    filter ?? "all"
+                  )
+                }
+              />
             )}
 
           </main>

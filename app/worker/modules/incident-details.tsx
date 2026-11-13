@@ -2,6 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+// =========================
+// SKELETON LOADING
+// (square corners and slate colors, same as the admin Dashboard)
+// =========================
+
+function Skeleton({ className = "" }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`block bg-slate-200 motion-safe:animate-pulse ${className}`}
+    />
+  );
+}
+
+// Screen readers hear this while the skeleton is shown.
+function LoadingStatus({ label = "Loading..." }: { label?: string }) {
+  return (
+    <span role="status" className="sr-only">
+      {label}
+    </span>
+  );
+}
 
 type IncidentDetailsProps = {
   deployment: any;
@@ -29,6 +51,42 @@ type Barangay = {
   name: string;
   code: string;
 };
+
+// Loading version of one label + value pair.
+function InfoFieldSkeleton({
+  valueClassName = "h-5 w-48",
+}: {
+  valueClassName?: string;
+}) {
+  return (
+    <div>
+      <Skeleton className="h-4 w-24" />
+      <Skeleton className={`mt-2.5 ${valueClassName}`} />
+    </div>
+  );
+}
+
+// Loading version of the "Incident Information" card body.
+function IncidentInfoSkeleton() {
+  return (
+    <div className="space-y-6 p-4 sm:p-8">
+      <InfoFieldSkeleton valueClassName="h-7 w-64 max-w-full" />
+      <InfoFieldSkeleton valueClassName="h-5 w-48 max-w-full" />
+      <InfoFieldSkeleton valueClassName="h-5 w-40 max-w-full" />
+
+      <div>
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="mt-2.5 h-5 w-full" />
+        <Skeleton className="mt-2 h-5 w-2/3" />
+      </div>
+
+      <div className="grid gap-6 border-t border-slate-200 pt-6 sm:grid-cols-2">
+        <InfoFieldSkeleton valueClassName="h-8 w-36" />
+        <InfoFieldSkeleton valueClassName="h-8 w-36" />
+      </div>
+    </div>
+  );
+}
 
 export default function IncidentDetails({
   deployment,
@@ -657,7 +715,10 @@ export default function IncidentDetails({
 
   if (!incidentDetails) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-3 pb-6 pt-4 sm:px-6 sm:pt-6">
+      <div
+        className="mx-auto w-full max-w-3xl px-3 pb-6 pt-4 sm:px-6 sm:pt-6"
+        aria-busy={detailsLoading}
+      >
 
         <button
           type="button"
@@ -667,14 +728,15 @@ export default function IncidentDetails({
           ← Back to Assignments
         </button>
 
-        <div className="border border-slate-300 bg-white p-8 text-center">
+        <div className="border border-slate-300 bg-white">
 
           {detailsLoading ? (
-            <p className="text-base text-slate-600">
-              Loading incident details...
-            </p>
+            <>
+              <LoadingStatus label="Loading incident details..." />
+              <IncidentInfoSkeleton />
+            </>
           ) : (
-            <p className="text-base text-red-700">
+            <p className="p-8 text-center text-base text-red-700">
               {detailsError ||
                 "Incident details are unavailable."}
             </p>
@@ -722,7 +784,14 @@ export default function IncidentDetails({
     "mt-1.5 text-base leading-7 text-slate-800";
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-3 pb-6 pt-4 sm:px-6 sm:pt-6 lg:px-8">
+    <div
+      className="mx-auto w-full max-w-[1600px] px-3 pb-6 pt-4 sm:px-6 sm:pt-6 lg:px-8"
+      aria-busy={detailsLoading}
+    >
+
+      {detailsLoading && (
+        <LoadingStatus label="Loading incident details..." />
+      )}
 
       <div className="space-y-5 border border-[#4438A8] bg-white p-4 text-slate-900 sm:space-y-6 sm:p-6 lg:space-y-8 lg:p-8">
 
@@ -775,6 +844,9 @@ export default function IncidentDetails({
               </p>
             </div>
 
+            {detailsLoading ? (
+              <IncidentInfoSkeleton />
+            ) : (
             <div className="space-y-6 p-4 sm:p-8">
 
               {/* INCIDENT TYPE */}
@@ -932,6 +1004,7 @@ export default function IncidentDetails({
               </div>
 
             </div>
+            )}
 
           </section>
 
@@ -1095,9 +1168,18 @@ export default function IncidentDetails({
 
               <div className="p-4 sm:p-8">
 
+                {/* LOADING (the status can still change once the
+                    incident finishes loading, so wait before
+                    showing a button) */}
+
+                {detailsLoading && (
+                  <Skeleton className="h-12 w-full" />
+                )}
+
                 {/* START TASK */}
 
-                {currentStatus ===
+                {!detailsLoading &&
+                  currentStatus ===
                   "assigned" && (
                   <button
                     type="button"
@@ -1117,7 +1199,8 @@ export default function IncidentDetails({
 
                 {/* RESOLVE */}
 
-                {(currentStatus ===
+                {!detailsLoading &&
+                  (currentStatus ===
                   "ongoing" ||
                   currentStatus ===
                     "in_progress") && (
@@ -1139,7 +1222,8 @@ export default function IncidentDetails({
 
                 {/* COMPLETED */}
 
-                {currentStatus ===
+                {!detailsLoading &&
+                  currentStatus ===
                   "resolved" && (
                   <div className="border border-emerald-200 bg-emerald-50 p-5 text-center">
 

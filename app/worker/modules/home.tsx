@@ -2,6 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+// =========================
+// SKELETON LOADING
+// (square corners and slate colors, same as the admin Dashboard)
+// =========================
+
+function Skeleton({ className = "" }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`block bg-slate-200 motion-safe:animate-pulse ${className}`}
+    />
+  );
+}
+
+// Screen readers hear this while the skeleton is shown.
+function LoadingStatus({ label = "Loading..." }: { label?: string }) {
+  return (
+    <span role="status" className="sr-only">
+      {label}
+    </span>
+  );
+}
 
 type Incident = {
   id: string;
@@ -18,6 +40,7 @@ type Deployment = {
   team_id: string;
   status: string;
   assigned_at: string;
+  started_at: string | null;
   resolved_at: string | null;
   incidents: Incident | null;
 };
@@ -29,7 +52,10 @@ type Barangay = {
 
 type HomeProps = {
   refreshKey: number;
+  // Opens the Assignments list.
   onOpenAssignments?: () => void;
+  // Opens one specific assignment (Incident Details) directly.
+  onSelectAssignment?: (deployment: Deployment) => void;
 };
 
 // Same card structure as the admin dashboard summary cards.
@@ -71,6 +97,37 @@ function SummaryCard({
   );
 }
 
+// Loading version of SummaryCard.
+function SummaryCardSkeleton() {
+  return (
+    <div className="relative min-w-0 border border-slate-300 bg-white p-4 sm:p-6">
+      <Skeleton className="absolute inset-x-0 top-0 h-0.5" />
+
+      <Skeleton className="h-4 w-24" />
+      <Skeleton className="mt-4 h-9 w-16 sm:h-10" />
+      <Skeleton className="mt-3 h-3 w-full max-w-40" />
+    </div>
+  );
+}
+
+// Loading version of an Active Incidents card.
+function IncidentCardSkeleton() {
+  return (
+    <div className="border border-l-4 border-slate-300 border-l-slate-200 bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <Skeleton className="h-6 w-20" />
+          <Skeleton className="mt-3 h-5 w-3/4" />
+          <Skeleton className="mt-2.5 h-4 w-1/2" />
+          <Skeleton className="mt-2 h-3 w-2/3" />
+        </div>
+
+        <Skeleton className="h-9 w-9 shrink-0" />
+      </div>
+    </div>
+  );
+}
+
 // Same panel structure as the admin dashboard.
 function Panel({
   title,
@@ -106,6 +163,7 @@ function Panel({
 export default function Home({
   refreshKey,
   onOpenAssignments,
+  onSelectAssignment,
 }: HomeProps) {
   const [deployments, setDeployments] =
     useState<Deployment[]>([]);
@@ -234,6 +292,8 @@ export default function Home({
 
     // =========================
     // GET DEPLOYMENTS
+    // (started_at is included so Incident Details can
+    // show the "Ongoing" time when opened from Home)
     // =========================
 
     const {
@@ -247,6 +307,7 @@ export default function Home({
         team_id,
         status,
         assigned_at,
+        started_at,
         resolved_at,
         incidents (
           id,
@@ -271,9 +332,8 @@ export default function Home({
       return;
     }
 
-    setDeployments(
-      (data as unknown as Deployment[]) || []
-    );
+    const deploymentList =
+      (data as unknown as Deployment[]) || [];
 
     // =========================
     // GET BARANGAYS
@@ -303,6 +363,10 @@ export default function Home({
         error
       );
     }
+
+    // Set the deployments last so the skeleton is replaced
+    // only when everything (including barangay names) is ready.
+    setDeployments(deploymentList);
 
     setLoading(false);
   }
@@ -384,6 +448,11 @@ export default function Home({
         )
     );
 
+  // Skeleton only on the first load. When refreshing,
+  // the old data stays visible with the "Updating" indicator.
+  const showSkeleton =
+    loading && deployments.length === 0;
+
   // =========================
   // STATUS LABEL
   // (UI only: colors and wording match the admin portal)
@@ -457,7 +526,12 @@ export default function Home({
   // =========================
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-3 pb-6 pt-4 sm:px-6 sm:pt-6 lg:px-8">
+    <div
+      className="mx-auto w-full max-w-[1600px] px-3 pb-6 pt-4 sm:px-6 sm:pt-6 lg:px-8"
+      aria-busy={showSkeleton}
+    >
+
+      {showSkeleton && <LoadingStatus />}
 
       <div className="space-y-5 border border-[#4438A8] bg-white p-4 text-slate-900 sm:space-y-6 sm:p-6 lg:space-y-8 lg:p-8">
 
@@ -495,9 +569,9 @@ export default function Home({
 
             </div>
 
-            {/* SUBTLE REFRESH INDICATOR */}
+            {/* SUBTLE REFRESH INDICATOR (only when refreshing) */}
 
-            {loading && (
+            {loading && !showSkeleton && (
               <div
                 className="flex shrink-0 items-center gap-2 text-xs font-medium text-indigo-100"
                 aria-live="polite"
@@ -537,23 +611,29 @@ export default function Home({
               </svg>
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
 
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Field Team
               </p>
 
-              <h2 className="mt-0.5 truncate text-lg font-bold text-[#123D73]">
-                {teamName ||
-                  (loading
-                    ? "Loading team..."
-                    : "Team")}
-              </h2>
+              {showSkeleton ? (
+                <>
+                  <Skeleton className="mt-1.5 h-6 w-40 max-w-full" />
+                  <Skeleton className="mt-2 h-4 w-52 max-w-full" />
+                </>
+              ) : (
+                <>
+                  <h2 className="mt-0.5 truncate text-lg font-bold text-[#123D73]">
+                    {teamName || "Team"}
+                  </h2>
 
-              {workerName && (
-                <p className="mt-0.5 truncate text-sm text-slate-600">
-                  Signed in as {workerName}
-                </p>
+                  {workerName && (
+                    <p className="mt-0.5 truncate text-sm text-slate-600">
+                      Signed in as {workerName}
+                    </p>
+                  )}
+                </>
               )}
 
             </div>
@@ -566,33 +646,44 @@ export default function Home({
 
         <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
 
-          <SummaryCard
-            label="Active"
-            value={criticalCount}
-            description="Requires immediate attention"
-            color="red"
-          />
+          {showSkeleton ? (
+            <>
+              <SummaryCardSkeleton />
+              <SummaryCardSkeleton />
+              <SummaryCardSkeleton />
+              <SummaryCardSkeleton />
+            </>
+          ) : (
+            <>
+              <SummaryCard
+                label="Active"
+                value={criticalCount}
+                description="Requires immediate attention"
+                color="red"
+              />
 
-          <SummaryCard
-            label="Monitoring"
-            value={monitoringCount}
-            description="Incidents under monitoring"
-            color="yellow"
-          />
+              <SummaryCard
+                label="Monitoring"
+                value={monitoringCount}
+                description="Incidents under monitoring"
+                color="yellow"
+              />
 
-          <SummaryCard
-            label="Resolved"
-            value={resolvedCount}
-            description="Completed assignments"
-            color="green"
-          />
+              <SummaryCard
+                label="Resolved"
+                value={resolvedCount}
+                description="Completed assignments"
+                color="green"
+              />
 
-          <SummaryCard
-            label="Total Assignments"
-            value={totalAssignments}
-            description="All assigned incidents"
-            color="blue"
-          />
+              <SummaryCard
+                label="Total Assignments"
+                value={totalAssignments}
+                description="All assigned incidents"
+                color="blue"
+              />
+            </>
+          )}
 
         </div>
 
@@ -601,18 +692,33 @@ export default function Home({
         <Panel
           title="Active Incidents"
           description="Assigned incidents that still need your team's attention"
-          rightLabel={`${activeDeployments.length} ${
-            activeDeployments.length === 1
-              ? "incident"
-              : "incidents"
-          }`}
+          rightLabel={
+            showSkeleton
+              ? "Loading..."
+              : `${activeDeployments.length} ${
+                  activeDeployments.length === 1
+                    ? "incident"
+                    : "incidents"
+                }`
+          }
         >
 
           <div className="p-4 sm:p-6">
 
+            {/* LOADING */}
+
+            {showSkeleton && (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 sm:gap-4 xl:grid-cols-3">
+                <IncidentCardSkeleton />
+                <IncidentCardSkeleton />
+                <IncidentCardSkeleton />
+              </div>
+            )}
+
             {/* NO ACTIVE INCIDENTS */}
 
-            {activeDeployments.length === 0 && (
+            {!showSkeleton &&
+              activeDeployments.length === 0 && (
               <div className="px-4 py-8 text-center">
 
                 <p className="text-base font-bold text-slate-800">
@@ -628,6 +734,7 @@ export default function Home({
 
             {/* ACTIVE LIST */}
 
+            {!showSkeleton && (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 sm:gap-4 xl:grid-cols-3">
 
               {activeDeployments
@@ -650,7 +757,17 @@ export default function Home({
                     <button
                       type="button"
                       key={deployment.id}
-                      onClick={onOpenAssignments}
+                      onClick={() =>
+                        // Opens this exact assignment (Incident Details).
+                        // If the parent did not pass onSelectAssignment,
+                        // fall back to the Assignments list.
+                        onSelectAssignment
+                          ? onSelectAssignment(deployment)
+                          : onOpenAssignments?.()
+                      }
+                      aria-label={`View details for ${incident.incident_type}, ${getBarangayName(
+                        incident.barangay_code
+                      )}`}
                       className={`w-full border border-l-4 border-slate-300 bg-white p-4 text-left transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#123D73]/30 ${status.border}`}
                     >
 
@@ -707,10 +824,12 @@ export default function Home({
                 })}
 
             </div>
+            )}
 
             {/* MORE THAN 5 */}
 
-            {activeDeployments.length > 5 && (
+            {!showSkeleton &&
+              activeDeployments.length > 5 && (
               <p className="mt-4 border-t border-slate-200 pt-4 text-center text-sm text-slate-500">
                 Showing 5 of {activeDeployments.length} active
                 incidents.{" "}

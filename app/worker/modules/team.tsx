@@ -2,6 +2,37 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+// =========================
+// SKELETON LOADING
+// (square corners and slate colors, same as the admin Dashboard)
+// =========================
+
+function Skeleton({
+  className = "",
+  tone = "light",
+}: {
+  className?: string;
+  // "dark" is for skeletons placed on the purple banner.
+  tone?: "light" | "dark";
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`block motion-safe:animate-pulse ${
+        tone === "dark" ? "bg-white/25" : "bg-slate-200"
+      } ${className}`}
+    />
+  );
+}
+
+// Screen readers hear this while the skeleton is shown.
+function LoadingStatus({ label = "Loading..." }: { label?: string }) {
+  return (
+    <span role="status" className="sr-only">
+      {label}
+    </span>
+  );
+}
 
 type TeamInfo = {
   id: string | number;
@@ -17,6 +48,20 @@ type Counts = {
   assigned: number;
   ongoing: number;
   resolved: number;
+};
+
+// Same values as the filter cards in the Assignments tab.
+type AssignmentFilter =
+  | "all"
+  | "assigned"
+  | "ongoing"
+  | "resolved"
+  | "red"
+  | "yellow";
+
+type TeamProps = {
+  // Opens the Assignments tab, optionally with a filter preselected.
+  onOpenAssignments?: (filter?: AssignmentFilter) => void;
 };
 
 // Same panel structure as the admin portal.
@@ -51,7 +96,21 @@ function Panel({
   );
 }
 
-export default function Team() {
+// Loading version of a team member card.
+function MemberCardSkeleton() {
+  return (
+    <div className="flex items-center gap-4 border border-slate-300 bg-white p-5">
+      <Skeleton className="h-12 w-12 shrink-0" />
+
+      <div className="min-w-0 flex-1">
+        <Skeleton className="h-4 w-32 max-w-full" />
+        <Skeleton className="mt-2 h-3 w-20" />
+      </div>
+    </div>
+  );
+}
+
+export default function Team({ onOpenAssignments }: TeamProps) {
   const [team, setTeam] = useState<TeamInfo | null>(null);
   const [accountName, setAccountName] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
@@ -188,6 +247,17 @@ export default function Team() {
 
   const teamName = team?.name ?? "Team";
 
+  // Each summary card opens Assignments with its matching filter.
+  const summaryCards: {
+    label: string;
+    value: number;
+    filter: AssignmentFilter;
+  }[] = [
+    { label: "Assigned", value: counts.assigned, filter: "assigned" },
+    { label: "Ongoing", value: counts.ongoing, filter: "ongoing" },
+    { label: "Resolved", value: counts.resolved, filter: "resolved" },
+  ];
+
   if (errorMessage) {
     return (
       <div className="mx-auto max-w-md px-3 pt-4">
@@ -208,7 +278,12 @@ export default function Team() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-3 pb-6 pt-4 sm:px-6 sm:pt-6 lg:px-8">
+    <div
+      className="mx-auto w-full max-w-[1600px] px-3 pb-6 pt-4 sm:px-6 sm:pt-6 lg:px-8"
+      aria-busy={loading}
+    >
+
+      {loading && <LoadingStatus />}
 
       <div className="space-y-5 border border-[#4438A8] bg-white p-4 text-slate-900 sm:space-y-6 sm:p-6 lg:space-y-8 lg:p-8">
 
@@ -219,7 +294,11 @@ export default function Team() {
           </p>
 
           <h1 className="mt-2 text-2xl font-bold text-white">
-            {loading ? "Loading team..." : teamName}
+            {loading ? (
+              <Skeleton tone="dark" className="h-8 w-48 max-w-full" />
+            ) : (
+              teamName
+            )}
           </h1>
 
           <p className="mt-2 text-base text-indigo-100">
@@ -254,22 +333,31 @@ export default function Team() {
                 </svg>
               </div>
 
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-slate-500">
                   Field Team
                 </p>
 
-                <h3 className="mt-1 text-xl font-bold text-[#123D73]">
-                  {loading ? "Loading..." : teamName}
-                </h3>
+                {loading ? (
+                  <>
+                    <Skeleton className="mt-2 h-6 w-40 max-w-full" />
+                    <Skeleton className="mt-3 h-8 w-28" />
+                  </>
+                ) : (
+                  <>
+                    <h3 className="mt-1 text-xl font-bold text-[#123D73]">
+                      {teamName}
+                    </h3>
 
-                <span className="mt-2 inline-flex w-28 items-center justify-center gap-2 border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800">
-                  <span
-                    aria-hidden="true"
-                    className="h-2 w-2 rounded-full bg-emerald-600"
-                  />
-                  Active
-                </span>
+                    <span className="mt-2 inline-flex w-28 items-center justify-center gap-2 border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800">
+                      <span
+                        aria-hidden="true"
+                        className="h-2 w-2 rounded-full bg-emerald-600"
+                      />
+                      Active
+                    </span>
+                  </>
+                )}
               </div>
 
             </div>
@@ -298,14 +386,23 @@ export default function Team() {
                 </svg>
               </div>
 
-              <div className="min-w-0">
-                <p className="text-base font-bold text-slate-900">
-                  {accountName || teamName}
-                </p>
+              <div className="min-w-0 flex-1">
+                {loading ? (
+                  <>
+                    <Skeleton className="h-5 w-40 max-w-full" />
+                    <Skeleton className="mt-3 h-4 w-56 max-w-full" />
+                  </>
+                ) : (
+                  <>
+                    <p className="text-base font-bold text-slate-900">
+                      {accountName || teamName}
+                    </p>
 
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  This account is assigned to {teamName}.
-                </p>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      This account is assigned to {teamName}.
+                    </p>
+                  </>
+                )}
               </div>
 
             </div>
@@ -313,25 +410,34 @@ export default function Team() {
 
         </div>
 
-        {/* ASSIGNMENT SUMMARY */}
+        {/* ASSIGNMENT SUMMARY (click to open Assignments with a filter) */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-5">
-          {[
-            { label: "Assigned", value: counts.assigned },
-            { label: "Ongoing", value: counts.ongoing },
-            { label: "Resolved", value: counts.resolved },
-          ].map((item) => (
-            <div
+          {summaryCards.map((item) => (
+            <button
               key={item.label}
-              className="border border-slate-300 bg-white p-5 sm:p-6"
+              type="button"
+              onClick={() => onOpenAssignments?.(item.filter)}
+              aria-label={`${item.label}: ${
+                loading ? "loading" : item.value
+              }. Open assignments`}
+              className="border border-slate-300 bg-white p-5 text-left transition-colors hover:border-[#123D73] hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#123D73]/30 sm:p-6"
             >
               <p className="text-sm font-bold text-slate-600">
                 {item.label}
               </p>
 
               <p className="mt-2 text-3xl font-bold text-slate-900">
-                {loading ? "-" : item.value}
+                {loading ? (
+                  <Skeleton className="h-9 w-12" />
+                ) : (
+                  item.value
+                )}
               </p>
-            </div>
+
+              <p className="mt-3 text-sm font-semibold text-[#123D73]">
+                View assignments →
+              </p>
+            </button>
           ))}
         </div>
 
@@ -339,11 +445,21 @@ export default function Team() {
         <Panel
           title="Team Members"
           description="Field worker accounts assigned to this team"
-          rightLabel={`${otherMembers.length} ${
-            otherMembers.length === 1 ? "member" : "members"
-          }`}
+          rightLabel={
+            loading
+              ? "Loading..."
+              : `${otherMembers.length} ${
+                  otherMembers.length === 1 ? "member" : "members"
+                }`
+          }
         >
-          {otherMembers.length === 0 ? (
+          {loading ? (
+            <div className="grid grid-cols-1 gap-4 p-4 sm:p-6 md:grid-cols-2 xl:grid-cols-3">
+              <MemberCardSkeleton />
+              <MemberCardSkeleton />
+              <MemberCardSkeleton />
+            </div>
+          ) : otherMembers.length === 0 ? (
             <div className="px-4 py-10 text-center">
               <p className="text-base font-bold text-slate-800">
                 No other members listed

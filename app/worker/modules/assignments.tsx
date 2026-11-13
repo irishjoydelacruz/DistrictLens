@@ -2,6 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+// =========================
+// SKELETON LOADING
+// (square corners and slate colors, same as the admin Dashboard)
+// =========================
+
+function Skeleton({ className = "" }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`block bg-slate-200 motion-safe:animate-pulse ${className}`}
+    />
+  );
+}
+
+// Screen readers hear this while the skeleton is shown.
+function LoadingStatus({ label = "Loading..." }: { label?: string }) {
+  return (
+    <span role="status" className="sr-only">
+      {label}
+    </span>
+  );
+}
 
 type Incident = {
   id: string;
@@ -18,6 +40,7 @@ type Deployment = {
   team_id: string;
   status: string;
   assigned_at: string;
+  started_at: string | null;
   resolved_at: string | null;
   incidents: Incident | null;
 };
@@ -27,14 +50,19 @@ type Barangay = {
   code: string;
 };
 
-type Filter =
+// Exported so the parent page can use the same type.
+export type Filter =
   | "all"
+  | "assigned"
+  | "ongoing"
+  | "resolved"
   | "red"
-  | "yellow"
-  | "resolved";
+  | "yellow";
 
 type AssignmentsProps = {
   refreshKey: number;
+  // Filter selected when the tab opens (e.g. "resolved" from Team).
+  initialFilter?: Filter;
   onSelectAssignment: (
     deployment: Deployment
   ) => void;
@@ -72,13 +100,35 @@ function Panel({
   );
 }
 
+// Loading version of an assignment card.
+function AssignmentCardSkeleton() {
+  return (
+    <div className="flex w-full flex-col border border-l-4 border-slate-300 border-l-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Skeleton className="h-6 w-28" />
+        <Skeleton className="h-6 w-20" />
+      </div>
+
+      <Skeleton className="mt-3 h-5 w-3/4" />
+      <Skeleton className="mt-2.5 h-4 w-1/2" />
+      <Skeleton className="mt-2 h-3 w-2/3" />
+
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-200 pt-3">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-9 w-9 shrink-0" />
+      </div>
+    </div>
+  );
+}
+
 export default function Assignments({
   refreshKey,
+  initialFilter = "all",
   onSelectAssignment,
 }: AssignmentsProps) {
 
   const [filter, setFilter] =
-    useState<Filter>("all");
+    useState<Filter>(initialFilter);
 
   const [deployments, setDeployments] =
     useState<Deployment[]>([]);
@@ -176,6 +226,8 @@ export default function Assignments({
 
     // =========================
     // GET DEPLOYMENTS
+    // (started_at is included so Incident Details can
+    // show the "Ongoing" time)
     // =========================
 
     const {
@@ -189,6 +241,7 @@ export default function Assignments({
         team_id,
         status,
         assigned_at,
+        started_at,
         resolved_at,
         incidents (
           id,
@@ -216,10 +269,9 @@ export default function Assignments({
       return;
     }
 
-    setDeployments(
+    const deploymentList =
       (data as unknown as Deployment[]) ||
-        []
-    );
+      [];
 
     // =========================
     // GET BARANGAYS
@@ -256,8 +308,17 @@ export default function Assignments({
 
     }
 
+    // Set the deployments last so the skeleton is replaced
+    // only when everything (including barangay names) is ready.
+    setDeployments(deploymentList);
+
     setLoading(false);
   }
+
+  // Skeleton only on the first load. When refreshing,
+  // the old data stays visible with the "Updating" indicator.
+  const showSkeleton =
+    loading && deployments.length === 0;
 
   // =========================
   // BARANGAY NAME
@@ -352,6 +413,25 @@ export default function Assignments({
   }
 
   // =========================
+  // PROGRESS HELPERS
+  // (same rules as getProgressStatus and the Team tab)
+  // =========================
+
+  function isOngoing(status: string) {
+    return (
+      status === "ongoing" ||
+      status === "in_progress"
+    );
+  }
+
+  function isAssigned(status: string) {
+    return (
+      !isOngoing(status) &&
+      status !== "resolved"
+    );
+  }
+
+  // =========================
   // FILTER
   // =========================
 
@@ -370,6 +450,15 @@ export default function Assignments({
           return true;
         }
 
+        // Progress filters (based on the team's own progress)
+        if (filter === "assigned") {
+          return isAssigned(deployment.status);
+        }
+
+        if (filter === "ongoing") {
+          return isOngoing(deployment.status);
+        }
+
         if (filter === "resolved") {
           return (
             incident.status ===
@@ -379,6 +468,7 @@ export default function Assignments({
           );
         }
 
+        // Incident filters ("red" = Active, "yellow" = Monitoring)
         return (
           incident.status ===
           filter
@@ -399,6 +489,16 @@ export default function Assignments({
 
   const counts = {
     all: withIncident.length,
+
+    assigned: withIncident.filter(
+      (deployment) =>
+        isAssigned(deployment.status)
+    ).length,
+
+    ongoing: withIncident.filter(
+      (deployment) =>
+        isOngoing(deployment.status)
+    ).length,
 
     red: withIncident.filter(
       (deployment) =>
@@ -432,19 +532,29 @@ export default function Assignments({
       count: counts.all,
     },
     {
-      value: "red",
-      label: "Active",
-      count: counts.red,
+      value: "assigned",
+      label: "Assigned",
+      count: counts.assigned,
     },
     {
-      value: "yellow",
-      label: "Monitoring",
-      count: counts.yellow,
+      value: "ongoing",
+      label: "Ongoing",
+      count: counts.ongoing,
     },
     {
       value: "resolved",
       label: "Resolved",
       count: counts.resolved,
+    },
+    {
+      value: "red",
+      label: "Incident: Active",
+      count: counts.red,
+    },
+    {
+      value: "yellow",
+      label: "Incident: Monitoring",
+      count: counts.yellow,
     },
   ];
 
@@ -487,7 +597,12 @@ export default function Assignments({
   // =========================
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-3 pb-6 pt-4 sm:px-6 sm:pt-6 lg:px-8">
+    <div
+      className="mx-auto w-full max-w-[1600px] px-3 pb-6 pt-4 sm:px-6 sm:pt-6 lg:px-8"
+      aria-busy={showSkeleton}
+    >
+
+      {showSkeleton && <LoadingStatus />}
 
       <div className="space-y-5 border border-[#4438A8] bg-white p-4 text-slate-900 sm:space-y-6 sm:p-6 lg:space-y-8 lg:p-8">
 
@@ -516,9 +631,9 @@ export default function Assignments({
 
             <div className="flex shrink-0 items-center gap-4">
 
-              {/* SUBTLE REFRESH INDICATOR */}
+              {/* SUBTLE REFRESH INDICATOR (only when refreshing) */}
 
-              {loading && (
+              {loading && !showSkeleton && (
                 <div
                   className="flex items-center gap-2 text-xs font-medium text-indigo-100"
                   aria-live="polite"
@@ -531,7 +646,8 @@ export default function Assignments({
               <button
                 type="button"
                 onClick={loadAssignments}
-                className="min-h-11 rounded-none border border-white/30 bg-white/10 px-5 py-2.5 text-base font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40"
+                disabled={loading}
+                className="min-h-11 rounded-none border border-white/30 bg-white/10 px-5 py-2.5 text-base font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 disabled:opacity-60"
               >
                 Refresh
               </button>
@@ -544,7 +660,7 @@ export default function Assignments({
 
         {/* STATUS SUMMARY (also works as the filter) */}
 
-        <div className="grid grid-cols-2 gap-3 sm:gap-5 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 xl:grid-cols-6">
 
           {statCards.map((card) => {
             const active = filter === card.value;
@@ -568,7 +684,11 @@ export default function Assignments({
                 </p>
 
                 <p className="mt-2 text-3xl font-bold text-slate-900 sm:mt-3">
-                  {card.count}
+                  {showSkeleton ? (
+                    <Skeleton className="h-9 w-12" />
+                  ) : (
+                    card.count
+                  )}
                 </p>
               </button>
             );
@@ -581,16 +701,36 @@ export default function Assignments({
         <Panel
           title="Assigned Incidents"
           description="Newest assignments first"
-          rightLabel={`${filteredDeployments.length} ${
-            filteredDeployments.length === 1
-              ? "assignment"
-              : "assignments"
-          } shown`}
+          rightLabel={
+            showSkeleton
+              ? "Loading..."
+              : `${filteredDeployments.length} ${
+                  filteredDeployments.length === 1
+                    ? "assignment"
+                    : "assignments"
+                } shown`
+          }
         >
 
           <div className="p-4 sm:p-6">
 
-            {filteredDeployments.length ===
+            {/* LOADING */}
+
+            {showSkeleton && (
+              <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <AssignmentCardSkeleton />
+                <AssignmentCardSkeleton />
+                <AssignmentCardSkeleton />
+                <AssignmentCardSkeleton />
+                <AssignmentCardSkeleton />
+                <AssignmentCardSkeleton />
+              </div>
+            )}
+
+            {/* EMPTY */}
+
+            {!showSkeleton &&
+              filteredDeployments.length ===
               0 && (
               <div className="px-4 py-10 text-center">
 
@@ -618,6 +758,9 @@ export default function Assignments({
               </div>
             )}
 
+            {/* LIST */}
+
+            {!showSkeleton && (
             <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
 
               {filteredDeployments.map(
@@ -742,6 +885,7 @@ export default function Assignments({
               )}
 
             </div>
+            )}
 
           </div>
 

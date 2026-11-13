@@ -2,6 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+// =========================
+// SKELETON LOADING
+// (square corners and slate colors, same as the admin Dashboard)
+// =========================
+
+function Skeleton({ className = "" }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`block bg-slate-200 motion-safe:animate-pulse ${className}`}
+    />
+  );
+}
+
+// Screen readers hear this while the skeleton is shown.
+function LoadingStatus({ label = "Loading..." }: { label?: string }) {
+  return (
+    <span role="status" className="sr-only">
+      {label}
+    </span>
+  );
+}
 
 type Incident = {
   id: string;
@@ -76,6 +98,39 @@ function Panel({
 
       <div className="min-w-0 flex-1">{children}</div>
     </section>
+  );
+}
+
+// Loading version of one notification row.
+function NotificationSkeleton() {
+  return (
+    <div className="border-l-4 border-l-slate-200 px-4 py-5 sm:px-8">
+      <div className="flex gap-4">
+        <Skeleton className="h-11 w-11 shrink-0" />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Skeleton className="h-5 w-48 max-w-full" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+
+          <Skeleton className="mt-3 h-4 w-full max-w-xl" />
+          <Skeleton className="mt-2 h-4 w-2/3 max-w-md" />
+
+          <div className="mt-4 grid gap-4 border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div>
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="mt-2 h-4 w-40 max-w-full" />
+            </div>
+
+            <div>
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="mt-2 h-4 w-32 max-w-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -608,30 +663,10 @@ export default function Notifications() {
       (item) => item.unread
     ).length;
 
-  // =========================
-  // LOADING
-  // =========================
-
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-md px-3 pt-8">
-
-        <div
-          className="border border-slate-300 bg-white p-8 text-center"
-          aria-live="polite"
-        >
-
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-[#123D73]" />
-
-          <p className="mt-4 text-sm text-slate-500">
-            Loading notifications...
-          </p>
-
-        </div>
-
-      </div>
-    );
-  }
+  // Skeleton only on the first load. When refreshing,
+  // the old data stays visible with the "Updating" indicator.
+  const showSkeleton =
+    loading && notifications.length === 0;
 
   // =========================
   // ERROR
@@ -672,7 +707,14 @@ export default function Notifications() {
   // =========================
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-3 pb-6 pt-4 sm:px-6 sm:pt-6 lg:px-8">
+    <div
+      className="mx-auto w-full max-w-[1600px] px-3 pb-6 pt-4 sm:px-6 sm:pt-6 lg:px-8"
+      aria-busy={showSkeleton}
+    >
+
+      {showSkeleton && (
+        <LoadingStatus label="Loading notifications..." />
+      )}
 
       <div className="space-y-5 border border-[#4438A8] bg-white p-4 text-slate-900 sm:space-y-6 sm:p-6 lg:space-y-8 lg:p-8">
 
@@ -698,13 +740,30 @@ export default function Notifications() {
 
             </div>
 
-            <button
-              type="button"
-              onClick={loadNotifications}
-              className="min-h-11 shrink-0 rounded-none border border-white/30 bg-white/10 px-5 py-2.5 text-base font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40"
-            >
-              Refresh
-            </button>
+            <div className="flex shrink-0 items-center gap-4">
+
+              {/* SUBTLE REFRESH INDICATOR (only when refreshing) */}
+
+              {loading && !showSkeleton && (
+                <div
+                  className="flex items-center gap-2 text-xs font-medium text-indigo-100"
+                  aria-live="polite"
+                >
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  Updating
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={loadNotifications}
+                disabled={loading}
+                className="min-h-11 rounded-none border border-white/30 bg-white/10 px-5 py-2.5 text-base font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 disabled:opacity-60"
+              >
+                Refresh
+              </button>
+
+            </div>
 
           </div>
 
@@ -744,7 +803,11 @@ export default function Notifications() {
               </p>
 
               <p className="mt-3 text-3xl font-bold text-slate-900 sm:text-4xl">
-                {card.count}
+                {showSkeleton ? (
+                  <Skeleton className="h-9 w-14 sm:h-10" />
+                ) : (
+                  card.count
+                )}
               </p>
             </div>
           ))}
@@ -756,10 +819,28 @@ export default function Notifications() {
         <Panel
           title="Recent Updates"
           description="Alerts for your team, newest assignments first"
-          rightLabel={`${unreadCount} new of ${notifications.length}`}
+          rightLabel={
+            showSkeleton
+              ? "Loading..."
+              : `${unreadCount} new of ${notifications.length}`
+          }
         >
 
-          {notifications.length === 0 && (
+          {/* LOADING */}
+
+          {showSkeleton && (
+            <div className="divide-y divide-slate-200">
+              <NotificationSkeleton />
+              <NotificationSkeleton />
+              <NotificationSkeleton />
+              <NotificationSkeleton />
+            </div>
+          )}
+
+          {/* EMPTY */}
+
+          {!showSkeleton &&
+            notifications.length === 0 && (
             <div className="px-4 py-12 text-center">
 
               <p className="text-base font-bold text-slate-800">
@@ -774,6 +855,9 @@ export default function Notifications() {
             </div>
           )}
 
+          {/* LIST */}
+
+          {!showSkeleton && (
           <div className="divide-y divide-slate-200">
 
             {notifications.map(
@@ -924,6 +1008,7 @@ export default function Notifications() {
             )}
 
           </div>
+          )}
 
         </Panel>
 
