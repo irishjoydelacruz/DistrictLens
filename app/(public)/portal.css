@@ -1,0 +1,1033 @@
+
+/* =========================================
+   DistrictLens Public Portal
+   Scoped styles only — does not replace
+   the Admin Portal's global CSS.
+========================================= */
+
+
+.public-portal-root {
+  --portal-navy: #123D73;
+  --portal-blue: #123D73;
+  --portal-action: #123D73;
+  --portal-border: #E2E8F0;
+  --portal-background: #F4F6F9;
+
+  min-width: 0;
+  min-height: 100vh;
+  background: var(--portal-background);
+  color: #123a63;
+
+  /* Same font as the Admin Portal */
+  font-family: var(--font-public-sans), "Segoe UI", Arial, sans-serif;
+
+  overflow-x: clip;
+}
+
+
+.public-portal-root *,
+.public-portal-root *::before,
+.public-portal-root *::after {
+  box-sizing: border-box;
+}
+
+.public-portal-root img {
+  max-width: 100%;
+}
+
+.public-portal-root a,
+.public-portal-root button,
+.public-portal-root input,
+.public-portal-root select,
+.public-portal-root textarea {
+  font: inherit;
+}
+
+.public-portal-root :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 3px;
+}
+
+/* Header and navigation */
+
+.public-portal-root .portal-header {
+  position: relative;
+  z-index: 1000;
+  border-color: var(--portal-border);
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(18 58 99 / 8%);
+}
+
+.public-portal-root .portal-brand-mark,
+.public-portal-root .footer-brand-mark {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border: 1px solid var(--portal-border);
+  border-radius: 50%;
+  background: #fff;
+}
+
+.public-portal-root .portal-brand-mark {
+  width: 42px;
+  height: 42px;
+}
+
+.public-portal-root .portal-main-nav a[aria-current="page"] {
+  background: #eff6ff;
+  color: var(--portal-navy);
+}
+
+.public-portal-root .portal-main-nav a:not([aria-current="page"]):hover {
+  background: #f8fafc;
+}
+
+/* Page introduction */
+
+.public-portal-root .page-intro-band {
+  display: block;
+  color: #fff;
+  background: linear-gradient(
+    108deg,
+    #0a2540 0%,
+    #174a7e 58%,
+    #28679d 100%
+  );
+}
+
+.public-portal-root .page-intro-content {
+  padding-top: 30px;
+  padding-bottom: 32px;
+}
+
+.public-portal-root .page-intro-eyebrow {
+  color: #bfdbfe;
+}
+
+/* Home hero */
+
+.public-portal-root .public-home-hero {
+  position: relative;
+  overflow: hidden;
+  border-color: #174a7e;
+  background: linear-gradient(
+    108deg,
+    #0a2540 0%,
+    #174a7e 58%,
+    #28679d 100%
+  );
+  box-shadow: 0 4px 12px rgb(18 58 99 / 12%);
+}
+
+.public-portal-root .hero-agency-seals {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.public-portal-root .hero-agency-seals img {
+  width: 90px;
+  height: 90px;
+  object-fit: contain;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* Status cards */
+
+.public-portal-root .home-status-card {
+  position: relative;
+  min-width: 0;
+  border-top-width: 4px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(18 58 99 / 5%);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.public-portal-root .home-status-card[data-status="active"] {
+  border-top-color: #ef4444;
+}
+
+.public-portal-root .home-status-card[data-status="monitoring"] {
+  border-top-color: #eab308;
+}
+
+.public-portal-root .home-status-card[data-status="normal"] {
+  border-top-color: #22c55e;
+}
+
+.public-portal-root .home-status-card[data-status="covered"] {
+  border-top-color: #2563eb;
+}
+
+@media (hover: hover) {
+  .public-portal-root .home-status-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgb(18 58 99 / 10%);
+  }
+}
+
+/* Status guide */
+
+.public-portal-root .service-status-guide-panel {
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(18 58 99 / 4%);
+}
+
+.public-portal-root .service-status-guide-row {
+  background: #fff;
+}
+
+.public-portal-root .service-status-guide-dot {
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.public-portal-root .service-status-guide-row[data-status="active"]
+  .service-status-guide-dot {
+  background: #ef4444;
+}
+
+.public-portal-root .service-status-guide-row[data-status="monitoring"]
+  .service-status-guide-dot {
+  background: #eab308;
+}
+
+/* Public map layout */
+
+.public-portal-root .public-map-main {
+  min-width: 0;
+}
+
+.public-portal-root .public-map-area {
+  width: 100%;
+  min-width: 0;
+  padding: 20px;
+}
+
+.public-portal-root .map-workspace {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: 12px;
+  width: 100%;
+  height: clamp(600px, calc(100dvh - 190px), 1000px);
+  min-height: 600px;
+}
+
+.public-portal-root .map-frame {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--portal-border);
+  border-radius: 16px;
+  background: #dce8f0;
+  box-shadow: 0 8px 24px rgb(18 58 99 / 6%);
+}
+
+.public-portal-root .map-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.public-portal-root .leaflet-map {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  background: #dce8f0;
+}
+
+/* Map search and filter controls */
+
+.public-portal-root .map-toolbar {
+  position: absolute;
+  z-index: 1001;
+  top: 14px;
+  right: 14px;
+  left: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: calc(100% - 28px);
+  pointer-events: none;
+}
+
+.public-portal-root .map-search,
+.public-portal-root .map-filter-button {
+  display: flex;
+  min-width: 0;
+  height: 44px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 97%);
+  box-shadow: 0 6px 18px rgb(18 58 99 / 10%);
+  pointer-events: auto;
+}
+
+.public-portal-root .map-search {
+  width: min(440px, 100%);
+  flex: 1 1 360px;
+  padding: 0 13px;
+}
+
+.public-portal-root .map-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.public-portal-root .map-filter-button {
+  flex-shrink: 0;
+  padding: 0 14px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.public-portal-root .map-filter-button:hover,
+.public-portal-root .map-filter-button.is-active {
+  border-color: #bfdbfe;
+  color: var(--portal-blue);
+}
+
+.public-portal-root .filter-count {
+  display: inline-flex;
+  width: 19px;
+  height: 19px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 10px;
+}
+
+.public-portal-root .map-filters {
+  position: absolute;
+  z-index: 1002;
+  top: 68px;
+  right: 14px;
+  width: min(560px, calc(100% - 28px));
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 98%);
+  box-shadow: 0 12px 28px rgb(18 58 99 / 12%);
+}
+
+.public-portal-root .map-filters[hidden] {
+  display: none;
+}
+
+.public-portal-root .map-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.public-portal-root .map-filter-grid label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.public-portal-root .map-filter-grid select {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+}
+
+.public-portal-root .reset-filters {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 10px;
+  padding: 9px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--portal-action);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.public-portal-root .reset-filters:hover {
+  background: var(--portal-navy);
+}
+
+/* Map legend */
+
+.public-portal-root .map-legend {
+  position: absolute;
+  z-index: 1001;
+  bottom: 14px;
+  left: 14px;
+  display: grid;
+  min-width: 116px;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--portal-border);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 5px 16px rgb(18 58 99 / 12%);
+}
+
+.public-portal-root .map-legend-title {
+  color: var(--portal-navy);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.public-portal-root .map-legend-item {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  gap: 9px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.public-portal-root .map-legend-swatch {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--status-soft, #fee2e2);
+}
+
+.public-portal-root .map-legend-swatch::after {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-color, #ef4444);
+  content: "";
+}
+
+.public-portal-root .map-legend-swatch[data-status="active"],
+.public-portal-root .status-indicator-dot[data-status="active"] {
+  --status-color: #ef4444;
+  --status-soft: #fee2e2;
+}
+
+.public-portal-root .map-legend-swatch[data-status="monitoring"],
+.public-portal-root .status-indicator-dot[data-status="monitoring"] {
+  --status-color: #ca8a04;
+  --status-soft: #fef9c3;
+}
+
+.public-portal-root .map-legend-swatch[data-status="normal"],
+.public-portal-root .status-indicator-dot[data-status="normal"] {
+  --status-color: #16a34a;
+  --status-soft: #dcfce7;
+}
+
+/* Incident side panel */
+
+.public-portal-root .incident-panel {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--portal-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(18 58 99 / 5%);
+}
+
+.public-portal-root .incident-panel-toggle {
+  display: block;
+  width: 100%;
+  padding: 18px;
+  border: 0;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.public-portal-root .incident-panel-subtitle {
+  padding: 0 18px 14px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.public-portal-root .incident-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.public-portal-root .incident-card {
+  margin: 0 12px 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.public-portal-root .incident-card.is-selected {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgb(96 165 250 / 18%);
+}
+
+.public-portal-root .incident-card-select {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.public-portal-root .incident-card-details {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-top: 1px solid #f1f5f9;
+  color: #174a7e;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.public-portal-root .incident-card-details:hover {
+  background: #eff6ff;
+}
+
+.public-portal-root .incident-panel-footer {
+  display: block;
+  padding: 14px 18px;
+  border-top: 1px solid #e2e8f0;
+  color: #174a7e;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.public-portal-root .incident-panel-footer:hover {
+  background: #eff6ff;
+}
+
+.public-portal-root .incident-empty {
+  padding: 28px 18px;
+  text-align: center;
+}
+
+/* Footer */
+
+.public-portal-root .portal-footer {
+  width: 100%;
+  padding: 24px max(24px, calc((100vw - 1380px) / 2)) 0;
+  background: linear-gradient(110deg, #0a2540, #174a7e);
+  color: #fff;
+}
+
+.public-portal-root .portal-footer-inner {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.35fr)
+    minmax(150px, .7fr)
+    minmax(180px, .8fr)
+    minmax(250px, 1.15fr);
+  gap: 28px;
+  align-items: start;
+  padding-bottom: 20px;
+}
+
+.public-portal-root .footer-brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.public-portal-root .footer-brand-mark {
+  width: 40px;
+  height: 40px;
+}
+
+.public-portal-root .footer-column {
+  min-width: 0;
+  min-height: 84px;
+  padding-left: 20px;
+  border-left: 1px solid rgb(147 197 253 / 35%);
+}
+
+.public-portal-root .footer-title {
+  margin: 0;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.public-portal-root .footer-link {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 0;
+  color: #e3efff;
+  font-size: 11px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.public-portal-root .footer-link:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.public-portal-root .footer-notice {
+  display: grid;
+  min-width: 0;
+  min-height: 84px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 4px 0 4px 24px;
+  border-left: 1px solid rgb(147 197 253 / 40%);
+}
+
+.public-portal-root .portal-footer-bottom {
+  display: flex;
+  min-height: 44px;
+  justify-content: center;
+  gap: 16px;
+  align-items: center;
+  border-top: 1px solid rgb(147 197 253 / 35%);
+  color: #e3efff;
+  font-size: 10px;
+}
+
+/* Responsive layout */
+
+@media (max-width: 1050px) {
+  .public-portal-root .portal-footer-inner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .public-portal-root .footer-column,
+  .public-portal-root .footer-notice {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .public-portal-root .footer-notice {
+    grid-column: 1 / -1;
+    padding-top: 18px;
+    border-top: 1px solid rgb(147 197 253 / 35%);
+  }
+
+  .public-portal-root .map-workspace {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+
+@media (max-width: 760px) {
+  .public-portal-root .public-map-area {
+    padding: 12px;
+  }
+
+  .public-portal-root .map-workspace {
+    display: flex;
+    height: auto;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .public-portal-root .map-frame {
+    height: 65vh;
+    min-height: 460px;
+  }
+
+  .public-portal-root .incident-panel {
+    height: auto;
+    max-height: 520px;
+  }
+
+  .public-portal-root .incident-list {
+    max-height: 420px;
+  }
+
+  .public-portal-root .hero-agency-seals {
+    justify-content: flex-start;
+    margin-top: 24px;
+  }
+
+  .public-portal-root .hero-agency-seals img {
+    width: 64px;
+    height: 64px;
+  }
+
+  .public-portal-root .portal-footer {
+    padding: 24px 20px 0;
+  }
+
+  .public-portal-root .portal-footer-inner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 18px;
+  }
+
+  .public-portal-root .footer-brand,
+  .public-portal-root .footer-notice {
+    grid-column: 1 / -1;
+  }
+
+  .public-portal-root .portal-footer-bottom {
+    min-height: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 12px 0;
+    line-height: 1.6;
+  }
+}
+
+@media (max-width: 480px) {
+  .public-portal-root .map-toolbar {
+    right: 8px;
+    left: 8px;
+    gap: 6px;
+    max-width: calc(100% - 16px);
+  }
+
+  .public-portal-root .map-search {
+    flex-basis: 0;
+    gap: 6px;
+    padding: 0 9px;
+  }
+
+  .public-portal-root .map-search input {
+    font-size: 11px;
+  }
+
+  .public-portal-root .map-filter-button {
+    gap: 5px;
+    padding: 0 9px;
+    font-size: 11px;
+  }
+
+  .public-portal-root .map-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .public-portal-root .map-filters {
+    right: 8px;
+    width: calc(100% - 16px);
+  }
+
+  .public-portal-root .map-legend {
+    bottom: 8px;
+    left: 8px;
+    padding: 9px;
+  }
+
+  .public-portal-root .portal-footer-inner {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Respect users who prefer less motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .public-portal-root *,
+  .public-portal-root *::before,
+  .public-portal-root *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* =========================================
+   DistrictLens — Admin-aligned styling
+========================================= */
+
+.public-portal-root {
+  font-family: var(--font-public-sans), "Segoe UI", Arial, sans-serif;
+  color: #334155;
+  background: #F4F6F9;
+}
+
+/* Header */
+.public-portal-root .portal-header {
+  border-color: #E2E8F0;
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 5%);
+}
+
+.public-portal-root .portal-brand-copy {
+  color: #123D73;
+}
+
+.public-portal-root .portal-brand-mark {
+  border-radius: 8px;
+  border-color: #E2E8F0;
+}
+
+/* Active navigation */
+.public-portal-root .portal-main-nav a[aria-current="page"],
+.public-portal-root .portal-main-nav a.is-active {
+  border-radius: 8px;
+  background: #EFF6FF;
+  color: #123D73;
+  font-weight: 700;
+}
+
+/* Shared card surfaces */
+.public-portal-root .home-status-card,
+.public-portal-root .service-status-guide-panel,
+.public-portal-root .map-frame,
+.public-portal-root .incident-panel {
+  border-color: #E2E8F0;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 5%);
+}
+
+/* Buttons */
+.public-portal-root .reset-filters {
+  border-radius: 8px;
+  background: #123D73;
+  transition: background 160ms ease;
+}
+
+.public-portal-root .reset-filters:hover {
+  background: #0D2F59;
+}
+
+/* Footer remains part of the same branding */
+.public-portal-root .portal-footer {
+  background: #123D73;
+}
+
+/* Keep map layers and controls usable above the map */
+.public-portal-root .map-toolbar,
+.public-portal-root .map-legend {
+  z-index: 1001;
+}
+
+.public-portal-root .map-filters {
+  z-index: 1002;
+}
+
+/* =========================================
+   Public Map — Incident List UI Fix
+   Keep this block at the VERY BOTTOM
+   of portal.css
+========================================= */
+
+/* Keep the map and incident panel within their grid columns */
+.public-portal-root .public-map-workspace {
+  min-width: 0;
+  align-items: stretch;
+}
+
+.public-portal-root .public-map-workspace > .map-frame,
+.public-portal-root .public-map-workspace > .incident-panel {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Incident panel: fixed header and footer, scrollable list */
+.public-portal-root .incident-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 5%);
+}
+
+/* Header */
+.public-portal-root .incident-panel-toggle {
+  flex: 0 0 auto;
+  padding: 18px 18px 14px;
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+/* Description below the heading */
+.public-portal-root .incident-panel-subtitle {
+  flex: 0 0 auto;
+  padding: 12px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* Only this section scrolls */
+.public-portal-root .incident-list {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Individual incident card */
+.public-portal-root .incident-list .incident-card {
+  display: block;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: none;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+/* Status border colors */
+.public-portal-root .incident-list .incident-card[data-status="active"] {
+  border-left-color: #dc2626;
+}
+
+.public-portal-root .incident-list .incident-card[data-status="monitoring"] {
+  border-left-color: #d97706;
+}
+
+.public-portal-root .incident-list .incident-card[data-status="normal"] {
+  border-left-color: #16a34a;
+}
+
+/* Selected card */
+.public-portal-root .incident-list .incident-card.is-selected {
+  border-color: #93c5fd;
+  border-left-color: #2563eb;
+  background: #f8fbff;
+  box-shadow: 0 0 0 1px rgb(37 99 235 / 8%);
+}
+
+/* Card content must stay inside its rounded border */
+.public-portal-root .incident-list .incident-card > div {
+  min-width: 0;
+  padding: 14px;
+}
+
+.public-portal-root .incident-list .incident-card h3,
+.public-portal-root .incident-list .incident-card p {
+  overflow-wrap: anywhere;
+}
+
+/* Make the incident title button fit the card */
+.public-portal-root .incident-list .incident-card button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* View details footer */
+.public-portal-root .incident-card-details {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 14px;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.public-portal-root .incident-card-details:hover {
+  background: #f8fafc;
+}
+
+/* Panel bottom button stays outside the scrollable list */
+.public-portal-root .incident-panel-footer {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding: 12px 18px;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+  text-align: center;
+}
+
+/* Empty state */
+.public-portal-root .incident-empty {
+  margin: 0;
+  padding: 32px 16px;
+  color: #64748b;
+  text-align: center;
+}
+
+/* Desktop and tablet */
+@media (max-width: 1050px) {
+  .public-portal-root .public-map-workspace {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 760px) {
+  .public-portal-root .public-map-workspace {
+    display: flex;
+    height: auto;
+    min-height: 0;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .public-portal-root .public-map-workspace > .map-frame {
+    height: 65vh;
+    min-height: 460px;
+  }
+
+  .public-portal-root .public-map-workspace > .incident-panel {
+    height: auto;
+    max-height: 620px;
+    min-height: 0;
+  }
+
+  .public-portal-root .incident-list {
+    flex: 0 1 auto;
+    max-height: 420px;
+  }
+}

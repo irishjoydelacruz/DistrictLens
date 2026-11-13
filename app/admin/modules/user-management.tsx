@@ -1,0 +1,1613 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import {
+  Users,
+  ShieldCheck,
+  Headset,
+  HardHat,
+  Plus,
+  Search,
+  RefreshCw,
+  Pencil,
+  Trash2,
+  Copy,
+  Check,
+  X,
+  UserPlus,
+  LoaderCircle,
+  AlertCircle,
+  CheckCircle2,
+  KeyRound,
+} from "lucide-react";
+
+type UserRole =
+  | "super_admin"
+  | "customer_service"
+  | "field_worker";
+
+type ManagedUser = {
+  id: string;
+  fullName: string | null;
+  role: UserRole;
+  mustChangePassword: boolean;
+  resetRequested: boolean;
+};
+
+type CreatedUser = {
+  id: string;
+  fullName: string;
+  role: UserRole;
+  temporaryPassword: string;
+};
+
+const roleOptions: { value: UserRole; label: string }[] = [
+  { value: "super_admin", label: "Admin" },
+  { value: "customer_service", label: "Customer Service" },
+  { value: "field_worker", label: "Field Team" },
+];
+
+const roleLabels: Record<UserRole, string> = {
+  super_admin: "Admin",
+  customer_service: "Customer Service",
+  field_worker: "Field Team",
+};
+
+const roleColors: Record<UserRole, string> = {
+  super_admin: "border-indigo-200 bg-indigo-50 text-indigo-800",
+  customer_service: "border-sky-200 bg-sky-50 text-sky-800",
+  field_worker: "border-amber-200 bg-amber-50 text-amber-800",
+};
+
+// UI-only class tokens (same look as the other admin pages).
+const inputBase =
+  "w-full rounded-none border border-slate-300 bg-white text-sm text-slate-800 shadow-sm placeholder:text-slate-400 transition-colors focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20";
+const labelClass = "mb-1.5 block text-sm font-bold text-slate-800";
+
+function isUserRole(value: unknown): value is UserRole {
+  return (
+    value === "super_admin" ||
+    value === "customer_service" ||
+    value === "field_worker"
+  );
+}
+
+export default function UserManagement() {
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterRole, setFilterRole] = useState("all");
+  const [page, setPage] = useState(1);
+
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingUser, setEditingUser] =
+    useState<ManagedUser | null>(null);
+
+  const [fullName, setFullName] = useState("");
+  const [role, setRole] =
+    useState<UserRole>("customer_service");
+
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [createdUser, setCreatedUser] =
+    useState<CreatedUser | null>(null);
+
+  const [copied, setCopied] = useState(false);
+
+  // Account waiting for delete confirmation (styled dialog)
+  const [deleteTarget, setDeleteTarget] =
+    useState<ManagedUser | null>(null);
+
+  // Password reset dialog (confirm first, then show the new password)
+  const [resetTarget, setResetTarget] =
+    useState<ManagedUser | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [resetCopied, setResetCopied] = useState(false);
+
+  // Load users from the API.
+  // `silent` = background refresh: no skeleton, no error banner, keeps the
+  // current list if the request fails.
+  const loadUsers = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
+
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      // A signed-out session is redirected to the login page (HTML, not JSON).
+      if (
+        response.redirected ||
+        !response.headers.get("content-type")?.includes("application/json")
+      ) {
+        window.location.href = "/admin/login";
+        return;
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load users.");
+      }
+
+      const loadedUsers: ManagedUser[] = (
+        Array.isArray(data.users) ? data.users : []
+      )
+        .filter(
+          (user: Record<string, unknown>) =>
+            typeof user.id === "string" &&
+            isUserRole(user.role)
+        )
+        .map((user: Record<string, unknown>) => ({
+          id: user.id as string,
+          fullName:
+            typeof user.fullName === "string"
+              ? user.fullName
+              : null,
+          role: user.role as UserRole,
+          mustChangePassword:
+            user.mustChangePassword === true,
+          resetRequested: user.resetRequested === true,
+        }));
+
+      setUsers(loadedUsers);
+    } catch (err) {
+      if (silent) {
+        console.error("Background refresh failed:", err);
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while loading users."
+        );
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
+
+  // Auto refresh (paused while saving or resetting a password)
+  useAutoRefresh(() => void loadUsers(true), !saving && !resetting);
+
+  // Go back to page 1 when the search or role filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, filterRole]);
+
+  // Reset and close forms
+  function resetForm() {
+    setFullName("");
+    setRole("customer_service");
+    setShowAddForm(false);
+    setEditingUser(null);
+  }
+
+  // Open Add User form
+  function openAddForm() {
+    setError("");
+    setMessage("");
+    setCreatedUser(null);
+    setCopied(false);
+
+    setEditingUser(null);
+    setFullName("");
+    setRole("customer_service");
+    setShowAddForm(true);
+  }
+
+  // Open Edit modal
+  function openEditForm(user: ManagedUser) {
+    setError("");
+    setMessage("");
+    setCreatedUser(null);
+
+    setShowAddForm(false);
+    setEditingUser(user);
+
+    setFullName(user.fullName ?? "");
+    setRole(user.role);
+  }
+
+  // Create or update account
+  async function handleSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    setError("");
+    setMessage("");
+
+    if (!fullName.trim()) {
+      setError("Please enter the user's full name.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const isEditing = Boolean(editingUser);
+
+      const response = await fetch("/api/admin/users", {
+        method: isEditing ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          isEditing
+            ? {
+                id: editingUser!.id,
+                fullName: fullName.trim(),
+                role,
+              }
+            : {
+                fullName: fullName.trim(),
+                role,
+              }
+        ),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            (isEditing
+              ? "Failed to update user."
+              : "Failed to create user.")
+        );
+      }
+
+      if (isEditing) {
+        setMessage("User account updated successfully.");
+        resetForm();
+        await loadUsers(true);
+      } else {
+        const newUser = data.user;
+
+        if (newUser && data.temporaryPassword) {
+          setCreatedUser({
+            id: newUser.id,
+            fullName:
+              newUser.fullName ?? fullName.trim(),
+            role: newUser.role ?? role,
+            temporaryPassword: data.temporaryPassword,
+          });
+        } else {
+          setMessage(
+            "Account created successfully, but the temporary password was not returned."
+          );
+        }
+
+        resetForm();
+        await loadUsers(true);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Ask for confirmation first (styled dialog instead of window.confirm)
+  function handleDelete(user: ManagedUser) {
+    setDeleteTarget(user);
+  }
+
+  // Delete account (runs only after the user confirms)
+  async function performDelete(user: ManagedUser) {
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: user.id }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete user.");
+      }
+
+      setMessage("User account deleted successfully.");
+      await loadUsers(true);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while deleting the user."
+      );
+    }
+  }
+
+  function closeResetDialog() {
+    setResetTarget(null);
+    setResetPassword("");
+    setResetCopied(false);
+  }
+
+  // Reset a user's password (runs only after the admin confirms)
+  async function performReset(user: ManagedUser) {
+    setError("");
+    setMessage("");
+    setResetting(true);
+
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: user.id, action: "reset-password" }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.temporaryPassword) {
+        throw new Error(data.error || "Failed to reset password.");
+      }
+
+      setResetPassword(data.temporaryPassword);
+      await loadUsers(true);
+    } catch (err) {
+      closeResetDialog();
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while resetting the password."
+      );
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  async function copyResetPassword() {
+    try {
+      await navigator.clipboard.writeText(resetPassword);
+      setResetCopied(true);
+      window.setTimeout(() => setResetCopied(false), 2000);
+    } catch {
+      setError("Unable to copy the password. Please copy it manually.");
+    }
+  }
+
+  // Copy temporary password
+  async function copyTemporaryPassword() {
+    if (!createdUser?.temporaryPassword) return;
+
+    try {
+      await navigator.clipboard.writeText(
+        createdUser.temporaryPassword
+      );
+
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError(
+        "Unable to copy the password. Please copy it manually."
+      );
+    }
+  }
+
+  // Filter accounts
+  const filteredUsers = users.filter((user) => {
+    const search = searchTerm.toLowerCase();
+
+    const matchesSearch =
+      (user.fullName ?? "").toLowerCase().includes(search);
+
+    const matchesRole =
+      filterRole === "all" || user.role === filterRole;
+
+    return matchesSearch && matchesRole;
+  });
+
+  // Pagination (10 per page)
+  const {
+    pageItems: pagedUsers,
+    page: currentPage,
+    totalPages,
+  } = paginate(filteredUsers, page);
+
+  // Summary counts
+  const totalAdmins = users.filter(
+    (user) => user.role === "super_admin"
+  ).length;
+
+  const totalCustomerService = users.filter(
+    (user) => user.role === "customer_service"
+  ).length;
+
+  const totalFieldTeams = users.filter(
+    (user) => user.role === "field_worker"
+  ).length;
+
+  return (
+    <div className="space-y-8 border border-[#4438A8] bg-white p-6 text-slate-900 sm:p-8">
+      {/* Page Header */}
+      <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-6 sm:px-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-bold text-indigo-100">
+              DistrictLens / Administration
+            </p>
+
+            <h2 className="mt-2 text-2xl font-bold text-white">
+              User Management
+            </h2>
+
+            <p className="mt-2 text-base text-indigo-100">
+              Manage system accounts and their assigned roles.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => void loadUsers()}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 disabled:opacity-50"
+            >
+              <RefreshCw
+                size={16}
+                className={loading ? "animate-spin" : ""}
+              />
+              Refresh
+            </button>
+
+            <button
+              type="button"
+              onClick={openAddForm}
+              className="inline-flex items-center justify-center gap-2 border border-white bg-white px-4 py-2.5 text-sm font-semibold text-[#241C70] transition hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-white/60"
+            >
+              <Plus size={18} />
+              Add User
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Success Message */}
+      {message && (
+        <div
+          role="status"
+          className="flex items-start gap-3 border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"
+        >
+          <CheckCircle2 size={20} className="mt-0.5 shrink-0" />
+          <p>{message}</p>
+
+          <button
+            type="button"
+            onClick={() => setMessage("")}
+            className="ml-auto"
+            aria-label="Dismiss success message"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
+          <AlertCircle size={20} className="mt-0.5 shrink-0" />
+          <p>{error}</p>
+
+          <button
+            type="button"
+            onClick={() => setError("")}
+            className="ml-auto"
+            aria-label="Dismiss error message"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="border border-slate-300 bg-white p-6 sm:p-7"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="mt-3 h-10 w-1/3" />
+                </div>
+                <Skeleton className="h-12 w-12 shrink-0" />
+              </div>
+            </div>
+          ))
+        ) : (
+          <>
+            <SummaryCard
+              title="Total Accounts"
+              count={users.length}
+              icon={<Users size={22} />}
+              accent="bg-[#123D73]"
+            />
+
+            <SummaryCard
+              title="Admins"
+              count={totalAdmins}
+              icon={<ShieldCheck size={22} />}
+              accent="bg-[#342992]"
+            />
+
+            <SummaryCard
+              title="Customer Service"
+              count={totalCustomerService}
+              icon={<Headset size={22} />}
+              accent="bg-sky-600"
+            />
+
+            <SummaryCard
+              title="Field Teams"
+              count={totalFieldTeams}
+              icon={<HardHat size={22} />}
+              accent="bg-amber-500"
+            />
+          </>
+        )}
+      </div>
+
+      {/* Add User Form */}
+      {showAddForm && (
+        <section className="border border-[#4438A8] bg-white">
+          <div className="flex items-center justify-between gap-4 border-b border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-5 sm:px-8">
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-white/30 bg-white/10 text-white">
+                <UserPlus size={21} />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-white">
+                  Create New Account
+                </h2>
+                <p className="mt-1 text-sm text-indigo-100">
+                  Add a new user to DistrictLens.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={resetForm}
+              disabled={saving}
+              className="p-2 text-indigo-100 transition hover:bg-white/10 hover:text-white"
+              aria-label="Close add user form"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-6 sm:p-8">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div>
+                <label htmlFor="fullName" className={labelClass}>
+                  Username (Full Name)
+                </label>
+
+                <input
+                  id="fullName"
+                  type="text"
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  placeholder="e.g. Juan Dela Cruz"
+                  required
+                  className={`${inputBase} px-3 py-2.5`}
+                />
+
+                <p className="mt-1.5 text-xs text-slate-500">
+                  The user signs in with this exact name and their password.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="role" className={labelClass}>
+                  Account Role
+                </label>
+
+                <Dropdown
+                  id="role"
+                  value={role}
+                  onChange={(value) => setRole(value as UserRole)}
+                  options={roleOptions}
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-6">
+              <button
+                type="button"
+                onClick={resetForm}
+                disabled={saving}
+                className="border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center justify-center gap-2 bg-[#123D73] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#0D2F59] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? (
+                  <>
+                    <LoaderCircle size={17} className="animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus size={17} />
+                    Create Account
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
+
+      {/* Temporary Password Notice */}
+      {createdUser && (
+        <section className="border border-amber-300 bg-amber-50 p-6 sm:p-8">
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-amber-200 bg-amber-100 text-amber-800">
+              <KeyRound size={22} />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-bold text-amber-900">
+                Account Created Successfully
+              </h2>
+
+              <p className="mt-1 text-sm text-amber-800">
+                A temporary password was generated for this account. Share
+                it securely with the intended user.
+              </p>
+
+              <div className="mt-5 border border-amber-200 bg-white p-5">
+                <p className="text-sm font-semibold text-slate-800">
+                  {createdUser.fullName}
+                </p>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Sign in with this name as the username.
+                </p>
+
+                <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Temporary Password
+                </p>
+
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <code className="break-all border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                    {createdUser.temporaryPassword}
+                  </code>
+
+                  <button
+                    type="button"
+                    onClick={copyTemporaryPassword}
+                    className="inline-flex items-center gap-2 border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    {copied ? <Check size={16} /> : <Copy size={16} />}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+
+                <p className="mt-4 text-xs text-slate-500">
+                  Keep this password private. The user should change it
+                  after signing in if your login flow supports forced
+                  password changes.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCreatedUser(null)}
+                className="mt-4 text-sm font-semibold text-amber-900 underline underline-offset-4"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Search + Filter */}
+      <section className="border border-slate-300 bg-white p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+          <div className="flex-1">
+            <label htmlFor="user-search" className={labelClass}>
+              Search
+            </label>
+
+            <div className="relative">
+              <Search
+                size={17}
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+
+              <input
+                id="user-search"
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search by name"
+                className={`${inputBase} py-2.5 pl-10 pr-3`}
+              />
+            </div>
+          </div>
+
+          <div className="w-full lg:w-64">
+            <label htmlFor="role-filter" className={labelClass}>
+              Role
+            </label>
+
+            <Dropdown
+              id="role-filter"
+              value={filterRole}
+              onChange={setFilterRole}
+              options={[
+                { value: "all", label: "All Roles" },
+                ...roleOptions,
+              ]}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4 text-sm text-slate-500">
+          <span>
+            {filteredUsers.length}{" "}
+            {filteredUsers.length === 1 ? "account" : "accounts"} shown
+          </span>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm("");
+              setFilterRole("all");
+            }}
+            className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+          >
+            Clear filters
+          </button>
+        </div>
+      </section>
+
+      {/* User Accounts Table */}
+      <section className="overflow-hidden border border-[#4438A8] bg-white">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-190 text-left [&_td]:border-r [&_td]:border-slate-200 [&_th]:border-r [&_th]:border-white/20 [&_td:last-child]:border-r-0 [&_th:last-child]:border-r-0">
+            <thead className="border-b border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8]">
+              <tr className="text-xs uppercase tracking-wide text-indigo-50">
+                <th className="px-6 py-3.5 font-semibold">User</th>
+                <th className="px-6 py-3.5 font-semibold">Role</th>
+                <th className="px-6 py-3.5 font-semibold">
+                  Password Status
+                </th>
+                <th className="px-6 py-3.5 text-right font-semibold">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-300">
+              {loading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-10 w-10 shrink-0" />
+                        <div>
+                          <Skeleton className="h-4 w-36" />
+                          <Skeleton className="mt-2 h-3 w-24" />
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <Skeleton className="h-6 w-28" />
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <Skeleton className="h-6 w-28" />
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <div className="flex justify-end gap-2">
+                        <Skeleton className="h-9 w-9" />
+                        <Skeleton className="h-9 w-9" />
+                        <Skeleton className="h-9 w-9" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-14 text-center">
+                    <Users
+                      size={30}
+                      className="mx-auto text-slate-300"
+                    />
+
+                    <p className="mt-3 text-sm font-medium text-slate-900">
+                      No accounts found
+                    </p>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                      Try changing your search or filter.
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                pagedUsers.map((user) => (
+                  <tr key={user.id} className="transition hover:bg-slate-50">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-slate-100 font-bold text-[#123D73]">
+                          {(user.fullName || "?")
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">
+                            {user.fullName || "Unnamed User"}
+                          </p>
+
+                          <p className="mt-0.5 font-mono text-xs text-slate-500">
+                            ID: {user.id.slice(0, 8)}...
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <span
+                        className={`inline-flex whitespace-nowrap border px-2 py-0.5 text-xs font-medium ${
+                          roleColors[user.role]
+                        }`}
+                      >
+                        {roleLabels[user.role]}
+                      </span>
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <span
+                        className={`inline-flex items-center gap-1.5 whitespace-nowrap border px-2 py-0.5 text-xs font-medium ${
+                          user.mustChangePassword
+                            ? "border-amber-200 bg-amber-50 text-amber-800"
+                            : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        }`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            user.mustChangePassword
+                              ? "bg-amber-500"
+                              : "bg-emerald-600"
+                          }`}
+                        />
+
+                        {user.mustChangePassword
+                          ? "Change Required"
+                          : "Active"}
+                      </span>
+
+                      {user.resetRequested && (
+                        <span className="mt-1.5 flex w-fit items-center gap-1.5 border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                          <KeyRound size={12} />
+                          Reset requested
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditForm(user)}
+                          aria-label={`Edit ${
+                            user.fullName || "this user"
+                          }`}
+                          title="Edit user"
+                          className="border border-slate-300 bg-white p-2 text-slate-600 transition hover:border-[#123D73] hover:bg-blue-50 hover:text-[#123D73]"
+                        >
+                          <Pencil size={16} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResetPassword("");
+                            setResetCopied(false);
+                            setResetTarget(user);
+                          }}
+                          aria-label={`Reset password for ${
+                            user.fullName || "this user"
+                          }`}
+                          title="Reset password"
+                          className="border border-slate-300 bg-white p-2 text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+                        >
+                          <KeyRound size={16} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(user)}
+                          aria-label={`Delete ${
+                            user.fullName || "this user"
+                          }`}
+                          title="Delete user"
+                          className="border border-slate-300 bg-white p-2 text-slate-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {!loading && (
+          <Pagination
+            page={currentPage}
+            totalPages={totalPages}
+            total={filteredUsers.length}
+            onPageChange={setPage}
+          />
+        )}
+
+        <div className="flex flex-col gap-2 border-t border-slate-300 bg-slate-50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-600">
+            Showing{" "}
+            <span className="font-semibold text-slate-900">
+              {pagedUsers.length}
+            </span>{" "}
+            of{" "}
+            <span className="font-semibold text-slate-900">
+              {users.length}
+            </span>{" "}
+            accounts
+          </p>
+
+          <p className="text-xs text-slate-500">
+            DistrictLens Account Administration
+          </p>
+        </div>
+      </section>
+
+      {/* Edit User Modal */}
+      {editingUser &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-1000 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-[2px]"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !saving) {
+                resetForm();
+              }
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="edit-user-title"
+              className="my-auto w-full max-w-lg overflow-hidden border border-[#4438A8] bg-white shadow-2xl"
+            >
+              <div className="flex items-center justify-between gap-4 border-b border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-5">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-white/30 bg-white/10 text-white">
+                    <Pencil size={20} />
+                  </div>
+
+                  <div>
+                    <h2
+                      id="edit-user-title"
+                      className="text-lg font-bold text-white"
+                    >
+                      Edit User Account
+                    </h2>
+
+                    <p className="mt-1 text-sm text-indigo-100">
+                      Update the user's name and role.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  disabled={saving}
+                  aria-label="Close edit modal"
+                  className="p-2 text-indigo-100 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="p-6 sm:p-8">
+                <div className="space-y-6">
+                  <div>
+                    <label htmlFor="edit-fullName" className={labelClass}>
+                      Username (Full Name)
+                    </label>
+
+                    <input
+                      id="edit-fullName"
+                      type="text"
+                      value={fullName}
+                      onChange={(event) => setFullName(event.target.value)}
+                      placeholder="Enter full name"
+                      required
+                      autoFocus
+                      className={`${inputBase} px-3 py-2.5`}
+                    />
+
+                    <p className="mt-1.5 text-xs text-slate-500">
+                      Changing the name also changes what the user types to
+                      sign in.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="edit-role" className={labelClass}>
+                      Account Role
+                    </label>
+
+                    <Dropdown
+                      id="edit-role"
+                      value={role}
+                      onChange={(value) => setRole(value as UserRole)}
+                      options={roleOptions}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-8 flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-6">
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    disabled={saving}
+                    className="border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center justify-center gap-2 bg-[#123D73] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#0D2F59] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? (
+                      <>
+                        <LoaderCircle
+                          size={17}
+                          className="animate-spin"
+                        />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={17} />
+                        Save Changes
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>,
+          document.body
+        )}
+
+      {/* Reset Password */}
+      {resetTarget &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-1100 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
+            role="presentation"
+          >
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="reset-user-title"
+              className="w-full max-w-md border border-[#DCD6FF] bg-white p-6 shadow-2xl sm:p-8"
+            >
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+                <KeyRound size={26} />
+              </div>
+
+              {resetPassword ? (
+                <>
+                  <h2
+                    id="reset-user-title"
+                    className="mt-5 text-center text-xl font-bold text-[#27205C]"
+                  >
+                    Password reset
+                  </h2>
+
+                  <p className="mt-2 text-center text-sm leading-6 text-slate-600">
+                    Give this temporary password to{" "}
+                    <span className="font-semibold text-slate-900">
+                      {resetTarget.fullName || "the user"}
+                    </span>
+                    . They will be asked to set a new password when they sign
+                    in. It will not be shown again.
+                  </p>
+
+                  <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                    <code className="break-all border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                      {resetPassword}
+                    </code>
+
+                    <button
+                      type="button"
+                      onClick={copyResetPassword}
+                      className="inline-flex items-center gap-2 border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      {resetCopied ? <Check size={16} /> : <Copy size={16} />}
+                      {resetCopied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={closeResetDialog}
+                    className="mt-6 w-full bg-linear-to-r from-[#342992] to-[#5366C8] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
+                  >
+                    Done
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h2
+                    id="reset-user-title"
+                    className="mt-5 text-center text-xl font-bold text-[#27205C]"
+                  >
+                    Reset this password?
+                  </h2>
+
+                  <p className="mt-2 text-center text-sm leading-6 text-slate-600">
+                    A new temporary password will be generated for{" "}
+                    <span className="font-semibold text-slate-900">
+                      {resetTarget.fullName || "this user"}
+                    </span>
+                    . Their current password will stop working.
+                  </p>
+
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={closeResetDialog}
+                      disabled={resetting}
+                      className="border border-[#D9D4EE] px-4 py-3 text-sm font-semibold text-[#5145B5] transition hover:bg-indigo-50 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={resetting}
+                      onClick={() => void performReset(resetTarget)}
+                      className="bg-linear-to-r from-[#342992] to-[#5366C8] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+                    >
+                      {resetting ? "Resetting..." : "Yes, reset"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Delete Confirmation */}
+      {deleteTarget &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-1100 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
+            role="presentation"
+          >
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="delete-user-title"
+              aria-describedby="delete-user-message"
+              className="w-full max-w-md border border-[#DCD6FF] bg-white p-6 shadow-2xl sm:p-8"
+            >
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-600">
+                <Trash2 size={26} />
+              </div>
+
+              <h2
+                id="delete-user-title"
+                className="mt-5 text-center text-xl font-bold text-[#27205C]"
+              >
+                Delete this account?
+              </h2>
+
+              <p
+                id="delete-user-message"
+                className="mt-2 text-center text-sm leading-6 text-slate-600"
+              >
+                You are about to delete the account for{" "}
+                <span className="font-semibold text-slate-900">
+                  {deleteTarget.fullName || "this user"}
+                </span>
+                . This action cannot be undone.
+              </p>
+
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  className="border border-[#D9D4EE] px-4 py-3 text-sm font-semibold text-[#5145B5] transition hover:bg-indigo-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = deleteTarget;
+                    setDeleteTarget(null);
+                    void performDelete(target);
+                  }}
+                  className="bg-red-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
+                >
+                  Yes, delete
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}
+
+function SummaryCard({
+  title,
+  count,
+  icon,
+  accent,
+}: {
+  title: string;
+  count: number;
+  icon: React.ReactNode;
+  accent: string;
+}) {
+  return (
+    <div className="relative border border-slate-300 bg-white p-6 sm:p-7">
+      <div className={`absolute inset-x-0 top-0 h-0.5 ${accent}`} />
+
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold text-slate-800">{title}</p>
+
+          <p className="mt-3 text-4xl font-bold text-slate-900">
+            {count}
+          </p>
+        </div>
+
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-slate-200 bg-slate-50 text-[#123D73]">
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Custom dropdown that replaces the native <select>, styled like the
+   Create Report dropdowns. The list renders in a portal so it is never
+   clipped by a modal, and always opens downward. */
+function Dropdown({
+  id,
+  value,
+  onChange,
+  options,
+  placeholder = "Select",
+}: {
+  id?: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<{
+    left: number;
+    width: number;
+    top: number;
+    maxHeight: number;
+  } | null>(null);
+
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const selected = options.find((option) => option.value === value);
+
+  const close = useCallback(() => setOpen(false), []);
+
+  const toggle = () => {
+    if (open) {
+      close();
+      return;
+    }
+
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const spaceBelow = window.innerHeight - rect.bottom - 16;
+
+    setPosition({
+      left: rect.left,
+      width: rect.width,
+      top: rect.bottom + 4,
+      maxHeight: Math.max(120, Math.min(280, spaceBelow)),
+    });
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        buttonRef.current?.contains(target) ||
+        listRef.current?.contains(target)
+      ) {
+        return;
+      }
+      close();
+    };
+
+    const onScroll = (event: Event) => {
+      if (listRef.current?.contains(event.target as Node)) return;
+      close();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", close);
+
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open, close]);
+
+  return (
+    <>
+      <button
+        id={id}
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={toggle}
+        className="flex w-full items-center justify-between border border-slate-300 bg-white px-3 py-2.5 text-left text-sm text-slate-800 shadow-sm transition-colors hover:border-[#123D73] focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20"
+      >
+        <span
+          className={
+            selected
+              ? "truncate font-medium text-slate-900"
+              : "truncate text-slate-500"
+          }
+        >
+          {selected?.label ?? placeholder}
+        </span>
+
+        <svg
+          className={`ml-2 h-4 w-4 shrink-0 text-slate-500 transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.22 7.22a.75.75 0 011.06 0L10 10.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 8.28a.75.75 0 010-1.06z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+
+      {open &&
+        position &&
+        createPortal(
+          <div
+            ref={listRef}
+            style={{
+              left: position.left,
+              width: position.width,
+              top: position.top,
+              maxHeight: position.maxHeight,
+            }}
+            className="fixed z-1200 flex flex-col overflow-hidden border border-slate-200 bg-white shadow-lg"
+          >
+            <div
+              role="listbox"
+              className="min-h-0 max-h-56 flex-1 overflow-y-auto p-1"
+            >
+              {options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={option.value === value}
+                  onClick={() => {
+                    onChange(option.value);
+                    close();
+                  }}
+                  className={`w-full px-3 py-2.5 text-left text-sm transition-colors ${
+                    option.value === value
+                      ? "bg-blue-50 font-semibold text-[#123D73]"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+/* -------------------------
+   SHARED HELPERS
+   (skeleton, pagination, auto refresh)
+------------------------- */
+
+const PAGE_SIZE = 10;
+const REFRESH_MS = 30_000; // auto refresh every 30 seconds
+
+function paginate<T>(items: T[], page: number, pageSize = PAGE_SIZE) {
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(Math.max(page, 1), totalPages);
+  const start = (safePage - 1) * pageSize;
+
+  return {
+    pageItems: items.slice(start, start + pageSize),
+    page: safePage,
+    totalPages,
+  };
+}
+
+// Runs `refresh` every REFRESH_MS while the tab is visible, and once more
+// when the user comes back to the tab.
+function useAutoRefresh(
+  refresh: () => void,
+  enabled = true,
+  intervalMs = REFRESH_MS
+) {
+  const latest = useRef(refresh);
+
+  useEffect(() => {
+    latest.current = refresh;
+  });
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const run = () => {
+      if (document.visibilityState === "visible") latest.current();
+    };
+
+    const id = window.setInterval(run, intervalMs);
+    document.addEventListener("visibilitychange", run);
+
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", run);
+    };
+  }, [enabled, intervalMs]);
+}
+
+function Skeleton({ className = "" }: { className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`animate-pulse bg-slate-200 ${className}`}
+    />
+  );
+}
+
+function Pagination({
+  page,
+  totalPages,
+  total,
+  pageSize = PAGE_SIZE,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  pageSize?: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (total <= pageSize) return null;
+
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+
+  const btn =
+    "border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-slate-300 bg-slate-50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+      <p className="text-sm text-slate-600">
+        Showing{" "}
+        <span className="font-semibold text-slate-900">
+          {from}–{to}
+        </span>{" "}
+        of <span className="font-semibold text-slate-900">{total}</span>
+      </p>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          className={btn}
+        >
+          Previous
+        </button>
+
+        <span className="px-3 text-sm font-semibold text-slate-700">
+          Page {page} of {totalPages}
+        </span>
+
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className={btn}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
