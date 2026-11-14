@@ -1599,6 +1599,7 @@ export default function CreateReport({
     const supabase = createClient();
     const finished = new Set<number>();
     const progress = new Map<number, Partial<ReportDraft>>();
+    const alertJobs: { barangays: string[]; title: string; message: string }[] = [];
     let failure = "";
 
     try {
@@ -1680,10 +1681,32 @@ export default function CreateReport({
         }
 
         finished.add(draft.id);
+
+        /* ALERT JOB: ipaalam sa mga subscriber kapag hindi pa resolved */
+        if (draft.status !== "green") {
+          const names = draft.pumpingStationRelated
+            ? validAffected(draft).map((code) => getBarangayName(code))
+            : [getBarangayName(draft.barangayCode)];
+          const etrText = draft.etr ? ` Inaasahang maibalik: ${formatEtr(draft.etr)}.` : "";
+          alertJobs.push({
+            barangays: names,
+            title: draft.incidentType,
+            message: `${draft.affectedArea.trim()}.${etrText}`,
+          });
+        }
       }
     } catch (error) {
       console.error("Submit error:", error);
       failure = error instanceof Error ? error.message : "Submission failed.";
+    }
+
+    // Hindi hinaharangan ang submission kapag pumalya ang notification.
+    for (const job of alertJobs) {
+      void fetch("/api/alerts/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(job),
+      }).catch((error) => console.warn("Alert send failed:", error));
     }
 
     if (failure) {
