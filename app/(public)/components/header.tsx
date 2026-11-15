@@ -4,8 +4,37 @@ import Image from "next/image";
 import Link from "next/link";
 import { useAlerts } from "./alert-provider";
 import { useSubmitReport } from "./submit-report-provider";
-import { Button } from "./ui";
 import { Icon } from "./icons";
+
+// UI-only: all three header actions share the same size, shape, and icon size.
+// Square buttons with the same hover lift as the buttons on the Home page.
+// The buttons sit in an equal-width grid, so they always match the widest
+// label and no label ever wraps.
+const actionBase =
+  "inline-flex min-h-11 w-full items-center justify-center gap-2 whitespace-nowrap border px-2 text-sm font-semibold text-white sm:px-3 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 motion-safe:hover:-translate-y-0.5 hover:shadow-md lg:px-5";
+const reportAction = "border-red-600 bg-red-600 hover:border-red-700 hover:bg-red-700";
+const alertsAction =
+  "border-emerald-700 bg-emerald-700 hover:border-emerald-800 hover:bg-emerald-800";
+const loginAction =
+  "border-[#123D73] bg-[#123D73] hover:border-[#0D2F59] hover:bg-[#0D2F59]";
+
+function PencilIcon({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+      <path d="m15 5 4 4" />
+    </svg>
+  );
+}
 
 export default function Header() {
   const { openAlerts, alertsEnabled } = useAlerts();
@@ -13,7 +42,7 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
-      <div className="mx-auto flex min-h-22 max-w-[1600px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-3 sm:min-h-22 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative h-14 w-14 shrink-0 sm:h-16 sm:w-16">
             <Image
@@ -42,37 +71,40 @@ export default function Header() {
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <Button
+        <div className="grid w-full grid-cols-3 items-center gap-2 sm:w-auto sm:shrink-0 sm:auto-cols-fr sm:grid-flow-col sm:grid-cols-none sm:gap-3">
+          <button
+            type="button"
             onClick={openSubmitReport}
             aria-haspopup="dialog"
             aria-controls="submit-report-modal"
-            className="shrink-0 bg-red-600! hover:bg-red-700!"
+            className={`${actionBase} ${reportAction}`}
           >
-            <Icon name="map-pin" className="size-4" />
-            <span className="hidden sm:inline">Submit Report</span>
-            <span className="sm:hidden">Report</span>
-          </Button>
+            <PencilIcon />
+            <span className="hidden lg:inline">Submit Report</span>
+            <span className="lg:hidden">Report</span>
+          </button>
 
-          <Button
+          <button
+            type="button"
             onClick={openAlerts}
             aria-haspopup="dialog"
             aria-controls="alerts-modal"
-            className="shrink-0"
+            className={`${actionBase} ${alertsAction}`}
           >
             <Icon name="bell" className="size-4" />
-            <span className="hidden sm:inline">
+            <span className="hidden lg:inline">
               {alertsEnabled ? "Manage Alerts" : "Get Barangay Alerts"}
             </span>
-            <span className="sm:hidden">Alerts</span>
-          </Button>
+            <span className="lg:hidden">Alerts</span>
+          </button>
 
           <Link
             href="/login"
-            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-[#123D73] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#0D2F59] sm:px-4 sm:text-sm"
+            className={`${actionBase} ${loginAction}`}
           >
-            <span className="hidden sm:inline">Staff Login</span>
-            <span className="sm:hidden">Login</span>
+            <Icon name="shield" className="size-4" />
+            <span className="hidden lg:inline">Staff Login</span>
+            <span className="lg:hidden">Login</span>
           </Link>
         </div>
       </div>
