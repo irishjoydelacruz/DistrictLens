@@ -6,17 +6,29 @@ import { useAlerts } from "./alert-provider";
 import { useSubmitReport } from "./submit-report-provider";
 import { Icon } from "./icons";
 
-// UI-only: all three header actions share the same size, shape, and icon size.
-// Square buttons with the same hover lift as the buttons on the Home page.
-// The buttons sit in an equal-width grid, so they always match the widest
-// label and no label ever wraps.
+// UI-only: the three header actions share the same height, shape, and icon
+// size, but have three levels of emphasis:
+//   1. Submit Report  = solid red (the main action)
+//   2. Alerts         = soft green tint + border (secondary)
+//   3. Staff Login    = ghost (no border or fill until hovered)
+// Phone: three equal columns, 44px tall so they are easy to tap.
+// Tablet and up: each button takes its own natural width, 40px tall.
+// Full labels show on large screens (lg); shorter ones below that.
 const actionBase =
-  "inline-flex min-h-11 w-full items-center justify-center gap-2 whitespace-nowrap border px-2 text-sm font-semibold text-white sm:px-3 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 motion-safe:hover:-translate-y-0.5 hover:shadow-md lg:px-5";
-const reportAction = "border-red-600 bg-red-600 hover:border-red-700 hover:bg-red-700";
+  "inline-flex min-h-11 w-full items-center justify-center gap-2 whitespace-nowrap border px-2 text-sm font-semibold sm:min-h-10 sm:w-auto sm:px-4 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 motion-safe:hover:-translate-y-0.5";
+
+// Solid
+const reportAction =
+  "border-red-600 bg-red-600 text-white hover:border-red-700 hover:bg-red-700 hover:shadow-md";
+
+// Soft tint + border
 const alertsAction =
-  "border-emerald-700 bg-emerald-700 hover:border-emerald-800 hover:bg-emerald-800";
+  "border-emerald-600 bg-emerald-50 text-emerald-700 hover:border-emerald-700 hover:bg-emerald-100 hover:text-emerald-800";
+
+// Ghost: transparent at rest, soft grey fill on hover. A thin divider on the
+// left (tablet and up) separates it from the other two actions.
 const loginAction =
-  "border-[#123D73] bg-[#123D73] hover:border-[#0D2F59] hover:bg-[#0D2F59]";
+  "relative border-transparent bg-transparent text-slate-700 hover:bg-slate-100 hover:text-[#123D73] sm:before:absolute sm:before:-left-[5px] sm:before:top-1/2 sm:before:h-7 sm:before:w-px sm:before:-translate-y-1/2 sm:before:bg-slate-200 sm:before:content-['']";
 
 function PencilIcon({ className = "size-4" }: { className?: string }) {
   return (
@@ -36,20 +48,43 @@ function PencilIcon({ className = "size-4" }: { className?: string }) {
   );
 }
 
+function LockIcon({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
 export default function Header() {
   const { openAlerts, alertsEnabled } = useAlerts();
   const { openSubmitReport } = useSubmitReport();
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-3 sm:min-h-22 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="relative h-14 w-14 shrink-0 sm:h-16 sm:w-16">
+      <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-3 sm:min-h-18 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 lg:px-8">
+        {/* Logo and title: click to go back to the Home page */}
+        <Link
+          href="/"
+          aria-label="DistrictLens home"
+          className="flex min-w-0 items-center gap-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#123D73]/30"
+        >
+          <div className="relative h-12 w-12 shrink-0 sm:h-14 sm:w-14">
             <Image
               src="/images/twd-logo.jpg"
               alt="Tanza Water District official logo"
               fill
-              sizes="64px"
+              sizes="56px"
               className="object-contain"
               priority
               loading="eager"
@@ -69,9 +104,9 @@ export default function Header() {
               Public Information Portal
             </p>
           </div>
-        </div>
+        </Link>
 
-        <div className="grid w-full grid-cols-3 items-center gap-2 sm:w-auto sm:shrink-0 sm:auto-cols-fr sm:grid-flow-col sm:grid-cols-none sm:gap-3">
+        <div className="grid w-full grid-cols-3 items-center gap-2 sm:flex sm:w-auto sm:shrink-0 sm:gap-2">
           <button
             type="button"
             onClick={openSubmitReport}
@@ -98,11 +133,8 @@ export default function Header() {
             <span className="lg:hidden">Alerts</span>
           </button>
 
-          <Link
-            href="/login"
-            className={`${actionBase} ${loginAction}`}
-          >
-            <Icon name="shield" className="size-4" />
+          <Link href="/login" className={`${actionBase} ${loginAction}`}>
+            <LockIcon />
             <span className="hidden lg:inline">Staff Login</span>
             <span className="lg:hidden">Login</span>
           </Link>
