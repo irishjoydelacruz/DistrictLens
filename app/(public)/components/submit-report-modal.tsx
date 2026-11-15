@@ -119,6 +119,25 @@ function SearchSelect({
     option.label.toLowerCase().includes(search.trim().toLowerCase()),
   )
 
+  // Computes where the list goes. Uses visualViewport so the on-screen
+  // keyboard on phones is not counted as available space.
+  function place() {
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    const vv = window.visualViewport
+    const viewportHeight = vv?.height ?? window.innerHeight
+    const viewportTop = vv?.offsetTop ?? 0
+
+    const width = rect.width
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+    // Always open below the field; shrink the list if there is little room.
+    const spaceBelow = viewportHeight + viewportTop - rect.bottom - 12
+    const maxHeight = Math.min(300, Math.max(spaceBelow, 160))
+
+    setPos({ left, width, top: rect.bottom + 4, maxHeight })
+  }
+
   function toggle() {
     if (open) {
       setOpen(false)
@@ -126,16 +145,7 @@ function SearchSelect({
       return
     }
 
-    const rect = buttonRef.current?.getBoundingClientRect()
-    if (!rect) return
-
-    const width = rect.width
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
-    // Always open below the field; shrink the list if there is little room.
-    const spaceBelow = window.innerHeight - rect.bottom - 12
-    const maxHeight = Math.min(300, Math.max(spaceBelow, 200))
-
-    setPos({ left, width, top: rect.bottom + 4, maxHeight })
+    place()
     setSearch("")
     setOpen(true)
   }
@@ -148,7 +158,8 @@ function SearchSelect({
       setSearch("")
     }
 
-    function onPointerDown(event: MouseEvent) {
+    // pointerdown works for both touch and mouse.
+    function onPointerDown(event: PointerEvent) {
       const target = event.target as Node
       if (
         buttonRef.current?.contains(target) ||
@@ -168,22 +179,30 @@ function SearchSelect({
       }
     }
 
-    function onScroll(event: Event) {
-      if (listRef.current?.contains(event.target as Node)) return
-      close()
+    // Do NOT close on scroll/resize: on phones, focusing the search input
+    // scrolls the modal and opens the keyboard (which resizes the viewport).
+    // Just reposition the list instead.
+    function onReposition(event?: Event) {
+      if (event && listRef.current?.contains(event.target as Node)) return
+      place()
     }
 
-    document.addEventListener("mousedown", onPointerDown)
+    document.addEventListener("pointerdown", onPointerDown)
     document.addEventListener("keydown", onKeyDown, true)
-    window.addEventListener("scroll", onScroll, true)
-    window.addEventListener("resize", close)
+    window.addEventListener("scroll", onReposition, true)
+    window.addEventListener("resize", onReposition)
+    window.visualViewport?.addEventListener("resize", onReposition)
+    window.visualViewport?.addEventListener("scroll", onReposition)
 
     return () => {
-      document.removeEventListener("mousedown", onPointerDown)
+      document.removeEventListener("pointerdown", onPointerDown)
       document.removeEventListener("keydown", onKeyDown, true)
-      window.removeEventListener("scroll", onScroll, true)
-      window.removeEventListener("resize", close)
+      window.removeEventListener("scroll", onReposition, true)
+      window.removeEventListener("resize", onReposition)
+      window.visualViewport?.removeEventListener("resize", onReposition)
+      window.visualViewport?.removeEventListener("scroll", onReposition)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   function pick(next: string) {
@@ -243,7 +262,13 @@ function SearchSelect({
             <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 p-2">
               <input
                 type="text"
-                autoFocus
+                // Auto-focus only on desktop. On phones it would pop the
+                // keyboard immediately and cover the list.
+                autoFocus={
+                  typeof window !== "undefined" &&
+                  window.matchMedia("(hover: hover) and (pointer: fine)")
+                    .matches
+                }
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={searchPlaceholder}
