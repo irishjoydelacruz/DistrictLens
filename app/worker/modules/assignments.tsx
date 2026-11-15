@@ -819,9 +819,13 @@ export default function Assignments({
 
         {/* INCIDENT STATUS CHIPS (tap again to clear) */}
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div
+          role="group"
+          aria-label="Incident status"
+          className="flex flex-nowrap items-center gap-1.5 sm:flex-wrap sm:gap-3"
+        >
 
-          <span className="text-sm font-semibold text-slate-600">
+          <span className="sr-only text-sm font-semibold text-slate-600 sm:not-sr-only">
             Incident status:
           </span>
 
@@ -838,7 +842,7 @@ export default function Assignments({
                     active ? "todo" : chip.value
                   )
                 }
-                className={`inline-flex min-h-11 items-center gap-2 rounded-none border px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-[#123D73]/30 ${
+                className={`inline-flex min-h-11 min-w-0 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-none border px-2 py-2 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-[#123D73]/30 sm:flex-none sm:justify-start sm:gap-2 sm:px-4 sm:text-sm ${
                   active
                     ? "border-[#123D73] bg-blue-50 text-[#123D73]"
                     : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -846,7 +850,7 @@ export default function Assignments({
               >
                 <span
                   aria-hidden="true"
-                  className={`h-2 w-2 rounded-full ${chip.dot}`}
+                  className={`h-2 w-2 shrink-0 rounded-full ${chip.dot}`}
                 />
                 {chip.label}
                 <span className="text-slate-500">
@@ -864,7 +868,7 @@ export default function Assignments({
                 filter === "all" ? "todo" : "all"
               )
             }
-            className={`inline-flex min-h-11 items-center gap-2 rounded-none border px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-[#123D73]/30 sm:ml-auto ${
+            className={`inline-flex min-h-11 min-w-0 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-none border px-2 py-2 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-[#123D73]/30 sm:ml-auto sm:flex-none sm:justify-start sm:gap-2 sm:px-4 sm:text-sm ${
               filter === "all"
                 ? "border-[#123D73] bg-blue-50 text-[#123D73]"
                 : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"

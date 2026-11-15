@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 // =========================
 // SKELETON LOADING
@@ -50,6 +51,78 @@ type AffectedBarangay = {
 type Barangay = {
   name: string;
   code: string;
+};
+
+// The two actions that need a confirmation before they run.
+type ConfirmAction = "ongoing" | "resolved";
+
+// Wording of the confirmation dialog for each action.
+const confirmCopy: Record<
+  ConfirmAction,
+  {
+    title: string;
+    message: string;
+    confirmLabel: string;
+    confirmClass: string;
+  }
+> = {
+  ongoing: {
+    title: "Start this task?",
+    message:
+      "The assignment will be marked as Ongoing and the current time will be recorded as the start time.",
+    confirmLabel: "Yes, start task",
+    confirmClass:
+      "border-[#123D73] bg-[#123D73] hover:bg-[#0D2F59] focus:ring-[#123D73]/30",
+  },
+  resolved: {
+    title: "Mark as resolved?",
+    message:
+      "The assignment will be marked as Resolved and the incident status will be set to Normal. This cannot be undone from this page.",
+    confirmLabel: "Yes, mark as resolved",
+    confirmClass:
+      "border-emerald-700 bg-emerald-700 hover:bg-emerald-800 focus:ring-emerald-700/30",
+  },
+};
+
+// Same pop-in as the confirmation dialog on Create Report.
+// Skipped when the device is set to reduce motion.
+const CONFIRM_DIALOG_CSS = `
+@keyframes incidentConfirmPop {
+  from { opacity: 0; transform: scale(.94) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.incident-confirm-pop {
+  animation: incidentConfirmPop 180ms ease-out both;
+}
+@keyframes incidentSuccessPop {
+  0% { opacity: 0; transform: scale(.72); }
+  70% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.incident-success-pop {
+  animation: incidentSuccessPop 420ms cubic-bezier(.2,.8,.2,1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .incident-confirm-pop,
+  .incident-success-pop { animation: none; }
+}
+`;
+
+// Wording of the success dialog for each action.
+const successCopy: Record<
+  ConfirmAction,
+  { title: string; message: string }
+> = {
+  ongoing: {
+    title: "Task Started",
+    message:
+      "The assignment is now marked as Ongoing.",
+  },
+  resolved: {
+    title: "Assignment Resolved",
+    message:
+      "The assignment is resolved and the incident is now marked as Normal.",
+  },
 };
 
 // Loading version of one label + value pair.
@@ -145,6 +218,78 @@ export default function IncidentDetails({
 
   const [updateMessage, setUpdateMessage] =
     useState("");
+
+  // Which action is waiting for the worker to confirm (null = none).
+  const [confirmAction, setConfirmAction] =
+    useState<ConfirmAction | null>(null);
+
+  // Which action just finished successfully (shows the check dialog).
+  const [successAction, setSuccessAction] =
+    useState<ConfirmAction | null>(null);
+
+  // Remembers the action that was confirmed, so the success
+  // dialog knows which wording to show.
+  const lastActionRef =
+    useRef<ConfirmAction | null>(null);
+
+  // =========================
+  // CONFIRM DIALOG
+  // (Esc closes it, and the page behind it does not scroll)
+  // =========================
+
+  useEffect(() => {
+    if (!confirmAction && !successAction) return;
+
+    const previousOverflow =
+      document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(
+      event: KeyboardEvent
+    ) {
+      if (event.key !== "Escape") return;
+
+      if (successAction) {
+        setSuccessAction(null);
+      } else if (!updating) {
+        setConfirmAction(null);
+      }
+    }
+
+    document.addEventListener(
+      "keydown",
+      onKeyDown
+    );
+
+    return () => {
+      document.body.style.overflow =
+        previousOverflow;
+
+      document.removeEventListener(
+        "keydown",
+        onKeyDown
+      );
+    };
+  }, [confirmAction, successAction, updating]);
+
+  // =========================
+  // SUCCESS DIALOG
+  // (opens only when updateStatus reports full success;
+  // the failure messages never trigger it)
+  // =========================
+
+  useEffect(() => {
+    if (
+      updateMessage ===
+        "Status updated successfully." &&
+      lastActionRef.current
+    ) {
+      setSuccessAction(
+        lastActionRef.current
+      );
+    }
+  }, [updateMessage]);
 
   // =========================
   // LOAD FULL INCIDENT DETAILS
@@ -710,6 +855,24 @@ export default function IncidentDetails({
   }
 
   // =========================
+  // CONFIRM THE ACTION
+  // (runs the same updateStatus as before, only after
+  // the worker taps the confirm button)
+  // =========================
+
+  async function handleConfirm() {
+    if (!confirmAction) return;
+
+    const action = confirmAction;
+
+    lastActionRef.current = action;
+
+    await updateStatus(action);
+
+    setConfirmAction(null);
+  }
+
+  // =========================
   // NO INCIDENT
   // =========================
 
@@ -1176,7 +1339,7 @@ export default function IncidentDetails({
                   <Skeleton className="h-12 w-full" />
                 )}
 
-                {/* START TASK */}
+                {/* START TASK (asks for confirmation first) */}
 
                 {!detailsLoading &&
                   currentStatus ===
@@ -1184,7 +1347,7 @@ export default function IncidentDetails({
                   <button
                     type="button"
                     onClick={() =>
-                      updateStatus(
+                      setConfirmAction(
                         "ongoing"
                       )
                     }
@@ -1197,7 +1360,7 @@ export default function IncidentDetails({
                   </button>
                 )}
 
-                {/* RESOLVE */}
+                {/* RESOLVE (asks for confirmation first) */}
 
                 {!detailsLoading &&
                   (currentStatus ===
@@ -1207,7 +1370,7 @@ export default function IncidentDetails({
                   <button
                     type="button"
                     onClick={() =>
-                      updateStatus(
+                      setConfirmAction(
                         "resolved"
                       )
                     }
@@ -1264,6 +1427,163 @@ export default function IncidentDetails({
         </div>
 
       </div>
+
+      {/* CONFIRM DIALOG
+          Rendered in a portal so no parent can clip or cover it. */}
+
+      {confirmAction &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-1300 flex items-center justify-center bg-slate-900/60 p-4"
+            onMouseDown={(event) => {
+              // Tap on the dark area closes the dialog.
+              if (
+                event.target ===
+                  event.currentTarget &&
+                !updating
+              ) {
+                setConfirmAction(null);
+              }
+            }}
+          >
+            <style>{CONFIRM_DIALOG_CSS}</style>
+
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="confirm-title"
+              aria-describedby="confirm-message"
+              className="incident-confirm-pop w-full max-w-md border border-[#4438A8] bg-white shadow-xl"
+            >
+
+              <div className="border-b border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-5 py-4">
+                <p className="text-xs font-bold text-indigo-100">
+                  Confirm action
+                </p>
+
+                <h2
+                  id="confirm-title"
+                  className="mt-1 text-lg font-bold text-white"
+                >
+                  {confirmCopy[confirmAction].title}
+                </h2>
+              </div>
+
+              <div className="p-5">
+
+                <p
+                  id="confirm-message"
+                  className="text-base leading-7 text-slate-700"
+                >
+                  {confirmCopy[confirmAction].message}
+                </p>
+
+                <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+
+                  {/* Cancel is focused first, so a quick Enter
+                      or tap does not confirm by accident. */}
+
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={() =>
+                      setConfirmAction(null)
+                    }
+                    disabled={updating}
+                    className="min-h-11 rounded-none border border-slate-300 bg-white px-5 py-2 text-base font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleConfirm}
+                    disabled={updating}
+                    className={`min-h-11 rounded-none border px-5 py-2 text-base font-semibold text-white transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 ${confirmCopy[confirmAction].confirmClass}`}
+                  >
+                    {updating
+                      ? "Updating..."
+                      : confirmCopy[confirmAction]
+                          .confirmLabel}
+                  </button>
+
+                </div>
+
+              </div>
+
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* SUCCESS DIALOG (check animation, same as Create Report) */}
+
+      {successAction &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-1300 flex items-center justify-center bg-slate-900/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="success-title"
+            aria-describedby="success-message"
+          >
+            <style>{CONFIRM_DIALOG_CSS}</style>
+
+            <div className="incident-success-pop w-full max-w-md border border-slate-300 bg-white p-6 text-center shadow-xl sm:p-8">
+
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <svg
+                  className="h-12 w-12"
+                  viewBox="0 0 48 48"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="24"
+                    cy="24"
+                    r="21"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                  />
+                  <path
+                    d="m13 24 7 7 15-16"
+                    stroke="currentColor"
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+
+              <h2
+                id="success-title"
+                className="mt-5 text-2xl font-bold text-[#123D73]"
+              >
+                {successCopy[successAction].title}
+              </h2>
+
+              <p
+                id="success-message"
+                className="mt-2 text-base leading-6 text-slate-600"
+              >
+                {successCopy[successAction].message}
+              </p>
+
+              <button
+                type="button"
+                autoFocus
+                onClick={() =>
+                  setSuccessAction(null)
+                }
+                className="mt-6 min-h-11 w-full rounded-none border border-[#123D73] bg-[#123D73] px-5 py-3 text-base font-semibold text-white transition-colors hover:bg-[#0D2F59] focus:outline-none focus:ring-2 focus:ring-[#123D73]/30"
+              >
+                Done
+              </button>
+
+            </div>
+          </div>,
+          document.body
+        )}
 
     </div>
   );
