@@ -238,6 +238,17 @@ const POPUP_CSS = `
   font-size: 12px;
   color: #64748b;
 }
+
+/* Mobile: a more compact popup so it fits inside the shorter map. */
+@media (max-width: 639px) {
+  .bm-popup-header { padding: 10px 12px; }
+  .bm-popup-title { font-size: 16px; }
+  .bm-popup-body { gap: 10px; padding: 12px; }
+  .bm-popup-summary { font-size: 13px; line-height: 1.45; }
+  .bm-popup-section { padding-top: 10px; }
+  .bm-popup-list { max-height: 84px; }
+  .bm-popup-item { padding: 8px 10px; }
+}
 `;
 
 const normalizeName = (value: string) =>
@@ -728,8 +739,14 @@ export default function BarangayMap({
 
     // The popup opens above the barangay, so leave room at the top of the
     // map for it. This pushes the barangay lower and keeps the popup in view.
+    // On phones the map is shorter and the popup is compact, so the top
+    // padding is based on the space left under the popup instead of a
+    // percentage of the map height.
     const mapHeight = mapRef.current.getSize().y;
-    const topPadding = Math.min(360, Math.round(mapHeight * 0.6));
+    const isMobile = window.innerWidth < 640;
+    const topPadding = isMobile
+      ? Math.max(120, Math.min(320, mapHeight - 140))
+      : Math.min(360, Math.round(mapHeight * 0.6));
 
     mapRef.current.fitBounds(bounds, {
       paddingTopLeft: [48, topPadding],
@@ -781,7 +798,7 @@ export default function BarangayMap({
       maxWidth: Math.min(320, window.innerWidth - 56),
       closeButton: false,
       autoPan: true,
-      autoPanPadding: [48, 48],
+      autoPanPadding: window.innerWidth < 640 ? [16, 16] : [48, 48],
       closeOnClick: false,
       offset: [0, -7],
     })

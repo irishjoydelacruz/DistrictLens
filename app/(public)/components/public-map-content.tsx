@@ -794,7 +794,7 @@ export default function PublicMapContent({
                   inside the map so it never paints over the sticky header. */}
               <div
                 className={`relative isolate z-0 overflow-hidden bg-slate-100 ${
-                  fullView ? "min-h-0 flex-1" : "h-120 sm:h-150"
+                  fullView ? "min-h-0 flex-1" : "h-136 sm:h-150"
                 }`}
               >
                 <Map
