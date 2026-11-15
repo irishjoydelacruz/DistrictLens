@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import { createPortal } from "react-dom"
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile"
 
 import { createClient } from "@/lib/supabase/client"
 import { barangays } from "../data/mock-data"
@@ -333,6 +334,8 @@ function SubmitReportModal({
   const [trackingNumber, setTrackingNumber] = useState("")
   const [copied, setCopied] = useState(false)
   const [attempted, setAttempted] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileInstance>(null)
 
   // Track form
   const [trackingInput, setTrackingInput] = useState("")
@@ -394,6 +397,7 @@ function SubmitReportModal({
     setTrackingNumber("")
     setCopied(false)
     setAttempted(false)
+    setTurnstileToken(null)
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -411,40 +415,45 @@ function SubmitReportModal({
       return
     }
 
+    if (!turnstileToken) {
+      setError("Please complete the verification first.")
+      return
+    }
+
     setError("")
     setBusy(true)
 
     try {
-      const supabase = createClient()
-      const { data, error: rpcError } = await supabase.rpc(
-        "submit_customer_report",
-        {
-          p_name: name,
-          p_contact: contact,
-          p_barangay: barangay,
-          p_address: address.trim() || null,
-          p_type: incidentType,
-          p_description: description,
-        },
-      )
+      const res = await fetch("/api/customer-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          contact,
+          barangay,
+          address,
+          incidentType,
+          description,
+          turnstileToken,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
 
-      if (rpcError || typeof data !== "string") {
-        // Show our own validation messages; hide technical errors.
-        const message = rpcError?.message ?? ""
-        const friendly = /^(Please|The address)/.test(message)
+      if (!res.ok || typeof data.trackingNumber !== "string") {
         setError(
-          friendly
-            ? message
-            : "We could not send your report. Please try again.",
+          data.error ?? "We could not send your report. Please try again.",
         )
         return
       }
 
-      setTrackingNumber(data)
+      setTrackingNumber(data.trackingNumber)
     } catch {
       setError("Something went wrong. Please check your connection and try again.")
     } finally {
       setBusy(false)
+      // The Turnstile token is single-use, so a new one is needed.
+      turnstileRef.current?.reset()
+      setTurnstileToken(null)
     }
   }
 
@@ -730,6 +739,14 @@ function SubmitReportModal({
                   {description.length}/1000
                 </span>
               </label>
+
+              <Turnstile
+                ref={turnstileRef}
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                onSuccess={setTurnstileToken}
+                onExpire={() => setTurnstileToken(null)}
+                onError={() => setTurnstileToken(null)}
+              />
             </div>
 
             <div className="flex flex-col-reverse gap-3 border-t border-slate-300 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end sm:px-8">
@@ -741,7 +758,11 @@ function SubmitReportModal({
               >
                 Cancel
               </button>
-              <button type="submit" disabled={busy} className={btnPrimary}>
+              <button
+                type="submit"
+                disabled={busy || !turnstileToken}
+                className={btnPrimary}
+              >
                 {busy ? "Sending…" : "Send Report"}
               </button>
             </div>

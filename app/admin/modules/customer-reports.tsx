@@ -20,6 +20,8 @@ type CustomerReport = {
   reviewed_at: string | null;
   incident_id: number | null;
   created_at: string;
+  possible_duplicate_of: string | null;
+  duplicate_resolution: "same" | "different" | null;
 };
 
 // What Create Report receives to pre-fill a new report from a customer report.
@@ -76,6 +78,9 @@ const compactPrimaryClass =
 const compactRejectClass =
   "border border-red-200 bg-white px-5 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200";
 
+const compactSecondaryClass =
+  "border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 disabled:cursor-not-allowed disabled:opacity-50";
+
 // Column layout shared by the list header and every report row (desktop).
 const rowGrid =
   "md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_7rem_1rem]";
@@ -93,6 +98,23 @@ function formatDate(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function WarningIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path
+        fillRule="evenodd"
+        d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
 }
 
 function Banner({
@@ -247,6 +269,71 @@ export default function CustomerReports({
       await load();
     } catch (error) {
       console.error("Unable to review customer report:", error);
+      setNotice("Unable to save your decision. Please try again.");
+      setNoticeIsError(true);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // "Same Incident" rejects the new report as a duplicate of the existing one.
+  // "Different Incident" keeps it pending and clears the warning.
+  async function resolveDuplicate(report: CustomerReport, same: boolean) {
+    setBusyId(report.id);
+    setNotice("");
+    setNoticeIsError(false);
+
+    try {
+      const supabase = createClient();
+      const existing = reports.find(
+        (item) => item.id === report.possible_duplicate_of
+      );
+
+      let payload: Record<string, unknown> = {
+        duplicate_resolution: "different",
+      };
+
+      if (same) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        payload = {
+          duplicate_resolution: "same",
+          status: "rejected",
+          rejection_reason: `Duplicate of report ${
+            existing?.tracking_number ?? "an existing report"
+          }.`,
+          reviewed_by: user?.id ?? null,
+          reviewed_at: new Date().toISOString(),
+        };
+      }
+
+      const { data, error } = await supabase
+        .from("customer_reports")
+        .update(payload)
+        .eq("id", report.id)
+        .eq("status", "pending")
+        .select("id");
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        setNotice(
+          "This report was already reviewed by someone else. The list was refreshed."
+        );
+        setNoticeIsError(true);
+      } else {
+        setNotice(
+          same
+            ? `Report ${report.tracking_number} was marked as a duplicate.`
+            : `Report ${report.tracking_number} was kept as a separate incident.`
+        );
+      }
+
+      await load();
+    } catch (error) {
+      console.error("Unable to resolve duplicate:", error);
       setNotice("Unable to save your decision. Please try again.");
       setNoticeIsError(true);
     } finally {
@@ -470,6 +557,15 @@ export default function CustomerReports({
               const panelId = `customer-report-${report.id}`;
               const tone = statusTone[report.status];
 
+              const hasDuplicateWarning =
+                report.status === "pending" &&
+                !!report.possible_duplicate_of &&
+                !report.duplicate_resolution;
+
+              const existingReport = hasDuplicateWarning
+                ? reports.find((item) => item.id === report.possible_duplicate_of)
+                : undefined;
+
               return (
                 <article key={report.id}>
                   {/* Collapsed row: click to open or close the details */}
@@ -486,6 +582,12 @@ export default function CustomerReports({
                       <p className="break-all text-base font-bold text-[#123D73]">
                         {report.tracking_number}
                       </p>
+                      {hasDuplicateWarning && (
+                        <span className="mt-1 inline-flex items-center gap-1 border border-yellow-400 bg-yellow-100 px-1.5 py-0.5 text-xs font-semibold text-yellow-900">
+                          <WarningIcon className="h-3.5 w-3.5 text-yellow-600" />
+                          Possible duplicate
+                        </span>
+                      )}
                       <p className="text-xs text-slate-500">
                         {formatDate(report.created_at)}
                       </p>
@@ -532,6 +634,95 @@ export default function CustomerReports({
                       id={panelId}
                       className="border-t border-slate-200 bg-slate-50 px-4 py-4 sm:px-5"
                     >
+                      {/* Possible duplicate warning */}
+                      {hasDuplicateWarning && (
+                        <div
+                          role="alert"
+                          className="mb-4 border-y border-r border-l-4 border-y-yellow-300 border-r-yellow-300 border-l-yellow-500 bg-yellow-50 p-4"
+                        >
+                          <div className="flex items-start gap-3">
+                            <WarningIcon className="mt-0.5 h-6 w-6 shrink-0 text-yellow-600" />
+
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-bold uppercase tracking-wide text-yellow-900">
+                                Possible duplicate report
+                              </p>
+                              <p className="mt-1 text-sm text-yellow-900">
+                                A similar report was found in the system.
+                                Please review both submissions before
+                                approving.
+                              </p>
+
+                              {existingReport ? (
+                                <dl className="mt-3 grid gap-x-8 gap-y-2 text-sm text-slate-800 sm:grid-cols-2">
+                                  <div>
+                                    <dt className="font-semibold">
+                                      Existing report
+                                    </dt>
+                                    <dd>{existingReport.tracking_number}</dd>
+                                  </div>
+                                  <div>
+                                    <dt className="font-semibold">Status</dt>
+                                    <dd>
+                                      {statusTone[existingReport.status].label}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="font-semibold">Type</dt>
+                                    <dd>{existingReport.incident_type}</dd>
+                                  </div>
+                                  <div>
+                                    <dt className="font-semibold">Barangay</dt>
+                                    <dd>{existingReport.barangay}</dd>
+                                  </div>
+                                  <div className="sm:col-span-2">
+                                    <dt className="font-semibold">Location</dt>
+                                    <dd>
+                                      {existingReport.address ||
+                                        "Not provided."}
+                                    </dd>
+                                  </div>
+                                  <div className="sm:col-span-2">
+                                    <dt className="font-semibold">Submitted</dt>
+                                    <dd>
+                                      {formatDate(existingReport.created_at)}
+                                    </dd>
+                                  </div>
+                                </dl>
+                              ) : (
+                                <p className="mt-2 text-sm text-yellow-900">
+                                  The existing report is not in the current
+                                  list.
+                                </p>
+                              )}
+
+                              <div className="mt-4 flex flex-wrap justify-end gap-3">
+                                <button
+                                  type="button"
+                                  disabled={busyId !== null}
+                                  onClick={() =>
+                                    void resolveDuplicate(report, false)
+                                  }
+                                  className={compactSecondaryClass}
+                                >
+                                  Different Incident
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busyId !== null}
+                                  onClick={() =>
+                                    void resolveDuplicate(report, true)
+                                  }
+                                  className={compactPrimaryClass}
+                                >
+                                  Same Incident
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
                         <Detail
                           label="Contact number"
