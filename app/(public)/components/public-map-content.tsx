@@ -450,7 +450,7 @@ export default function PublicMapContent({
         />
 
         {/* HOW TO USE + LEGEND */}
-        <section className="flex flex-col gap-5 border border-slate-300 bg-white px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+        <section className="flex flex-col gap-5 border border-slate-300 bg-white px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-[#123D73]">
               How to use the map
@@ -461,22 +461,24 @@ export default function PublicMapContent({
             </p>
           </div>
 
+          {/* Always one line. Smaller text and tighter gaps on phones. */}
           <div
-            className="flex flex-wrap items-center gap-x-6 gap-y-2"
+            className="flex flex-nowrap items-center gap-x-3 sm:gap-x-6"
             role="group"
             aria-label="Map status legend"
           >
-            <span className="text-sm font-bold uppercase tracking-[0.08em] text-slate-500">
+            <span className="text-xs font-bold uppercase tracking-[0.06em] text-slate-500 sm:text-sm sm:tracking-[0.08em]">
               Status
             </span>
+
             {statuses.map((status) => (
               <span
                 key={status}
-                className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700"
+                className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-slate-700 sm:gap-2 sm:text-sm"
               >
                 <span
                   aria-hidden="true"
-                  className={`h-3 w-3 rounded-full ${statusTone[status].dot}`}
+                  className={`h-2.5 w-2.5 rounded-full sm:h-3 sm:w-3 ${statusTone[status].dot}`}
                 />
                 {status}
               </span>
@@ -493,7 +495,8 @@ export default function PublicMapContent({
             aria-label="Tanza barangay map"
           >
             <div className="flex flex-col gap-5 border-b border-slate-200 px-5 py-5 sm:px-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              {/* Title and "Tanza, Cavite" stay on one row, even on phones */}
+              <div className="flex flex-nowrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-lg font-bold text-[#123D73]">
                     Barangay Service Map
@@ -503,7 +506,7 @@ export default function PublicMapContent({
                   </p>
                 </div>
 
-                <span className="w-fit shrink-0 border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
+                <span className="w-fit shrink-0 whitespace-nowrap border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 sm:px-4 sm:py-2 sm:text-sm">
                   Tanza, Cavite
                 </span>
               </div>
@@ -700,40 +703,40 @@ export default function PublicMapContent({
                   fullView ? "min-h-0 flex-1" : "h-120 sm:h-150"
                 }`}
               >
-              <Map
-                key={fullView ? "map-full" : "map-card"}
-                onBarangayClick={(name) => {
-                  setSelectedBarangay(name);
-                  setFocusBarangay(name);
-                }}
-                onPopupClose={() => setSelectedBarangay(null)}
-                focusBarangay={focusBarangay}
-                selectedBarangay={selectedBarangay}
-                visibleBarangays={filteredBarangays}
-              />
+                <Map
+                  key={fullView ? "map-full" : "map-card"}
+                  onBarangayClick={(name) => {
+                    setSelectedBarangay(name);
+                    setFocusBarangay(name);
+                  }}
+                  onPopupClose={() => setSelectedBarangay(null)}
+                  focusBarangay={focusBarangay}
+                  selectedBarangay={selectedBarangay}
+                  visibleBarangays={filteredBarangays}
+                />
 
-              {!fullView && (
-                <button
-                  type="button"
-                  onClick={() => setFullView(true)}
-                  aria-label="View map in full screen"
-                  className="absolute right-3 top-3 z-1000 inline-flex items-center gap-2 rounded-none! border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[#123D73] shadow-sm transition-colors hover:border-[#123D73] hover:bg-[#E8EEF6]"
-                >
-                  <svg
-                    className="h-4 w-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
+                {!fullView && (
+                  <button
+                    type="button"
+                    onClick={() => setFullView(true)}
+                    aria-label="View map in full screen"
+                    className="absolute right-3 top-3 z-1000 inline-flex items-center gap-2 rounded-none! border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[#123D73] shadow-sm transition-colors hover:border-[#123D73] hover:bg-[#E8EEF6]"
                   >
-                    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
-                  </svg>
-                  Full view
-                </button>
-              )}
+                    <svg
+                      className="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+                    </svg>
+                    Full view
+                  </button>
+                )}
               </div>
             </div>
           </section>
