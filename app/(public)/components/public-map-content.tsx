@@ -321,6 +321,38 @@ function PageBanner({
 
 const statuses: Status[] = ["Active", "Monitoring", "Normal"];
 
+// Lower number = more critical = shown first when sorting by criticality.
+const statusRank: Record<Status, number> = {
+  Active: 0,
+  Monitoring: 1,
+  Normal: 2,
+};
+
+// Newest-first is the default order of the "Latest updates" list.
+type SortMode = "newest" | "oldest" | "critical";
+
+const sortOptions: { value: SortMode; label: string }[] = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "critical", label: "Most critical first" },
+];
+
+// Same recency rule as the History page.
+function reportTime(report: Report) {
+  const timestamp =
+    report.updatedAt ?? Date.parse(`${report.date} ${report.time}`);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+// Most critical first (Active, Monitoring, Normal); newest first within a
+// status.
+function byCriticality(a: Report, b: Report) {
+  return (
+    statusRank[a.status] - statusRank[b.status] ||
+    reportTime(b) - reportTime(a)
+  );
+}
+
 export default function PublicMapContent({
   onNavigate,
 }: PublicMapContentProps) {
@@ -335,6 +367,21 @@ export default function PublicMapContent({
   );
   const [focusBarangay, setFocusBarangay] = useState<string | null>(null);
   const [fullView, setFullView] = useState(false);
+  // Where the current selection came from. Only a click on the MAP moves the
+  // matching reports to the top of the list; clicking a report card in the
+  // list never reorders it under the visitor's finger.
+  const [selectionSource, setSelectionSource] = useState<
+    "map" | "list" | null
+  >(null);
+  // Goes up by one on every map click, so the list jumps back to the top
+  // even when the same barangay is clicked twice.
+  const [mapClickTick, setMapClickTick] = useState(0);
+  // How the "Latest updates" list is sorted. Newest issue first by default.
+  const [sortMode, setSortMode] = useState<SortMode>("newest");
+  // When the selection last changed. Opening a popup can make the map report
+  // the previous popup closing a moment later; that must not wipe the new
+  // selection (it made the highlighted card vanish right after a click).
+  const lastSelectAtRef = useRef(0);
 
   // Full-screen map: lock page scroll and let Esc exit.
   useEffect(() => {
@@ -353,6 +400,23 @@ export default function PublicMapContent({
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [fullView]);
+
+  // Map -> list: when a barangay is clicked on the map, its reports move to
+  // the top of the "Latest updates" list (see `displayReports` below), and the
+  // list scrolls back to the top so they are right there. Only the list
+  // scrolls, not the whole page.
+  useEffect(() => {
+    if (mapClickTick === 0) return;
+
+    const list = document.getElementById("latest-updates-list");
+    if (!list) return;
+
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    list.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  }, [mapClickTick]);
 
   const barangayNames = useMemo(() => [...barangays].sort(), []);
 
@@ -385,6 +449,34 @@ export default function PublicMapContent({
     });
   }, [reports, search, barangayFilter, statusFilter, typeFilter]);
 
+  // Order of the "Latest updates" list:
+  //   - By default the newest issue comes first. The "Sort by" control can
+  //     switch to oldest first, or to most critical first (Active, then
+  //     Monitoring, then Normal).
+  //   - When a barangay was clicked on the map, the reports that affect it are
+  //     pinned to the top, most critical (Active) first. The rest of the list
+  //     keeps the chosen sort.
+  const displayReports = useMemo(() => {
+    const ordered = [...filteredReports].sort((a, b) => {
+      if (sortMode === "oldest") return reportTime(a) - reportTime(b);
+      if (sortMode === "critical") return byCriticality(a, b);
+      return reportTime(b) - reportTime(a);
+    });
+
+    if (!selectedBarangay || selectionSource !== "map") {
+      return ordered;
+    }
+
+    const matches = ordered
+      .filter((report) => reportAffectsBarangay(report, selectedBarangay))
+      .sort(byCriticality);
+    const others = ordered.filter(
+      (report) => !reportAffectsBarangay(report, selectedBarangay),
+    );
+
+    return [...matches, ...others];
+  }, [filteredReports, selectedBarangay, selectionSource, sortMode]);
+
   const activeFilters = [barangayFilter, statusFilter, typeFilter].filter(
     (filter) => filter !== "all",
   ).length;
@@ -401,6 +493,8 @@ export default function PublicMapContent({
       barangays.find((name) => reportAffectsBarangay(report, name)) ??
       report.barangay;
 
+    lastSelectAtRef.current = Date.now();
+    setSelectionSource("list");
     setSelectedBarangay(affectedBarangay);
     setFocusBarangay(affectedBarangay);
     document
@@ -706,10 +800,17 @@ export default function PublicMapContent({
                 <Map
                   key={fullView ? "map-full" : "map-card"}
                   onBarangayClick={(name) => {
+                    lastSelectAtRef.current = Date.now();
+                    setSelectionSource("map");
                     setSelectedBarangay(name);
                     setFocusBarangay(name);
+                    setMapClickTick((tick) => tick + 1);
                   }}
-                  onPopupClose={() => setSelectedBarangay(null)}
+                  onPopupClose={() => {
+                    // Ignore the close that comes from opening another popup.
+                    if (Date.now() - lastSelectAtRef.current < 600) return;
+                    setSelectedBarangay(null);
+                  }}
                   focusBarangay={focusBarangay}
                   selectedBarangay={selectedBarangay}
                   visibleBarangays={filteredBarangays}
@@ -762,6 +863,26 @@ export default function PublicMapContent({
               </span>
             </div>
 
+            {filteredReports.length > 1 && (
+              <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-5 py-3 sm:px-6">
+                <label
+                  htmlFor="report-sort"
+                  className="shrink-0 text-sm font-bold text-slate-800"
+                >
+                  Sort by
+                </label>
+
+                <div className="min-w-0 flex-1">
+                  <Dropdown
+                    id="report-sort"
+                    value={sortMode}
+                    onChange={(value) => setSortMode(value as SortMode)}
+                    options={sortOptions}
+                  />
+                </div>
+              </div>
+            )}
+
             <div
               id="latest-updates-list"
               className="max-h-160 space-y-4 overflow-y-auto bg-[#F4F6F9] p-4"
@@ -770,7 +891,7 @@ export default function PublicMapContent({
               aria-live="polite"
             >
               {filteredReports.length ? (
-                filteredReports.map((report) => {
+                displayReports.map((report) => {
                   const selected =
                     selectedBarangay &&
                     reportAffectsBarangay(report, selectedBarangay);
@@ -779,12 +900,12 @@ export default function PublicMapContent({
                     <article
                       key={report.id}
                       data-status={report.status.toLowerCase()}
-                      className={`border border-t-[3px] bg-white transition-colors duration-200 hover:border-[#123D73] ${
+                      className={`border border-t-[3px] transition-colors duration-200 hover:border-[#123D73] ${
                         statusTone[report.status].top
                       } ${
                         selected
-                          ? "border-[#123D73] shadow-[0_0_0_1px_#123D73]"
-                          : "border-slate-300"
+                          ? "border-[#123D73] bg-blue-50 shadow-[0_0_0_1px_#123D73]"
+                          : "border-slate-300 bg-white"
                       }`}
                     >
                       <button
