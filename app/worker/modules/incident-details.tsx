@@ -830,6 +830,13 @@ export default function IncidentDetails({
       }
 
       // =========================
+      // NOTIFY SUBSCRIBERS
+      // (only reached when everything above succeeded)
+      // =========================
+
+      notifySubscribers(newStatus);
+
+      // =========================
       // UPDATE LOCAL STATUS
       // =========================
 
@@ -870,6 +877,44 @@ export default function IncidentDetails({
     await updateStatus(action);
 
     setConfirmAction(null);
+  }
+
+  // =========================
+  // PUBLIC PUSH ALERT
+  // (the server checks the assignment and writes the message,
+  // so only the deployment ID and the new status are sent)
+  // =========================
+
+  function notifySubscribers(
+    newStatus: string
+  ) {
+    if (
+      !deployment?.id ||
+      (newStatus !== "ongoing" &&
+        newStatus !== "resolved")
+    ) {
+      return;
+    }
+
+    void fetch(
+      "/api/alerts/notify-progress",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          deploymentId: deployment.id,
+          status: newStatus,
+        }),
+      }
+    ).catch((error) =>
+      console.warn(
+        "Alert send failed:",
+        error
+      )
+    );
   }
 
   // =========================
