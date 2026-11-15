@@ -213,12 +213,6 @@ const smallPrimaryButtonClass =
 const smallReportButtonClass =
   "inline-flex w-fit items-center gap-2 rounded-none! bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-600/30";
 
-const primaryButtonClass =
-  "rounded-none! bg-[#123D73] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#0D2F59] focus:outline-none focus:ring-2 focus:ring-[#123D73]/30";
-
-const secondaryButtonClass =
-  "rounded-none! border border-slate-300 bg-white px-6 py-3 text-base font-medium text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#123D73]/20";
-
 const detailRowClass =
   "grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-[200px_minmax(0,1fr)] sm:items-center sm:gap-4 sm:px-6";
 
@@ -270,11 +264,13 @@ function Panel({
   );
 }
 
+// Optional: the page no longer has navigation buttons, but the prop is kept so
+// the parent component can still pass it without a type error.
 type ContactContentProps = {
-  onNavigate: (section: "map" | "history") => void;
+  onNavigate?: (section: "map" | "history") => void;
 };
 
-export default function ContactContent({ onNavigate }: ContactContentProps) {
+export default function ContactContent(_props: ContactContentProps) {
   const { openSubmitReport, openTrackReport } = useSubmitReport();
 
   const [query, setQuery] = useState("");
@@ -702,28 +698,6 @@ export default function ContactContent({ onNavigate }: ContactContentProps) {
               )}
             </div>
           </Panel>
-
-          {/* EXPLORE */}
-          <section
-            className="flex flex-col gap-3 sm:flex-row"
-            aria-label="Explore the public portal"
-          >
-            <button
-              type="button"
-              onClick={() => onNavigate("map")}
-              className={primaryButtonClass}
-            >
-              View Public Map
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onNavigate("history")}
-              className={secondaryButtonClass}
-            >
-              View Incident History
-            </button>
-          </section>
         </div>
       </div>
     </main>

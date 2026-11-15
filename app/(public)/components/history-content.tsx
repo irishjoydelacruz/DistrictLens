@@ -123,6 +123,25 @@ function SearchSelect({
     option.label.toLowerCase().includes(search.trim().toLowerCase()),
   );
 
+  // Computes where the list goes. Uses visualViewport so the on-screen
+  // keyboard on phones is not counted as available space.
+  function place() {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const vv = window.visualViewport;
+    const viewportHeight = vv?.height ?? window.innerHeight;
+    const viewportTop = vv?.offsetTop ?? 0;
+
+    const width = rect.width;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+    // Always open below the field; shrink the list if there is little room.
+    const spaceBelow = viewportHeight + viewportTop - rect.bottom - 12;
+    const maxHeight = Math.min(300, Math.max(spaceBelow, 160));
+
+    setPos({ left, width, top: rect.bottom + 4, maxHeight });
+  }
+
   function toggle() {
     if (open) {
       setOpen(false);
@@ -130,16 +149,7 @@ function SearchSelect({
       return;
     }
 
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const width = rect.width;
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
-    // Always open below the field; shrink the list if there is little room.
-    const spaceBelow = window.innerHeight - rect.bottom - 12;
-    const maxHeight = Math.min(300, Math.max(spaceBelow, 200));
-
-    setPos({ left, width, top: rect.bottom + 4, maxHeight });
+    place();
     setSearch("");
     setOpen(true);
   }
@@ -152,7 +162,8 @@ function SearchSelect({
       setSearch("");
     }
 
-    function onPointerDown(event: MouseEvent) {
+    // pointerdown works for both touch and mouse.
+    function onPointerDown(event: PointerEvent) {
       const target = event.target as Node;
       if (
         buttonRef.current?.contains(target) ||
@@ -170,22 +181,30 @@ function SearchSelect({
       }
     }
 
-    function onScroll(event: Event) {
-      if (listRef.current?.contains(event.target as Node)) return;
-      close();
+    // Do NOT close on scroll/resize: on phones, focusing the search input
+    // scrolls the page and opens the keyboard (which resizes the viewport).
+    // Just reposition the list instead.
+    function onReposition(event?: Event) {
+      if (event && listRef.current?.contains(event.target as Node)) return;
+      place();
     }
 
-    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown, true);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", close);
+    window.addEventListener("scroll", onReposition, true);
+    window.addEventListener("resize", onReposition);
+    window.visualViewport?.addEventListener("resize", onReposition);
+    window.visualViewport?.addEventListener("scroll", onReposition);
 
     return () => {
-      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown, true);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", onReposition, true);
+      window.removeEventListener("resize", onReposition);
+      window.visualViewport?.removeEventListener("resize", onReposition);
+      window.visualViewport?.removeEventListener("scroll", onReposition);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   function pick(next: string) {
@@ -241,7 +260,13 @@ function SearchSelect({
             <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 p-2">
               <input
                 type="text"
-                autoFocus
+                // Auto-focus only on desktop. On phones it would pop the
+                // keyboard immediately and cover the list.
+                autoFocus={
+                  typeof window !== "undefined" &&
+                  window.matchMedia("(hover: hover) and (pointer: fine)")
+                    .matches
+                }
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={searchPlaceholder}
@@ -518,43 +543,43 @@ export default function HistoryContent({
             {/* Phone and tablet: a swipeable row of filter tabs inside a
                 container. Large screens: the full summary cards. */}
             <div className="border border-slate-300 bg-white p-2 lg:border-0 lg:bg-transparent lg:p-0">
-            <div
-              role="group"
-              aria-label="Filter by status"
-              className="flex snap-x gap-2 overflow-x-auto lg:grid lg:grid-cols-5 lg:gap-5 lg:overflow-visible"
-            >
-              {statusCards.map((card) => {
-                const active = status === card.value;
+              <div
+                role="group"
+                aria-label="Filter by status"
+                className="flex snap-x gap-2 overflow-x-auto lg:grid lg:grid-cols-5 lg:gap-5 lg:overflow-visible"
+              >
+                {statusCards.map((card) => {
+                  const active = status === card.value;
 
-                return (
-                  <button
-                    key={card.value}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => setStatus(card.value)}
-                    className={`flex min-h-11 shrink-0 snap-start items-center gap-3 rounded-none! border px-4 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 lg:block lg:p-6 ${
-                      active
-                        ? "border-[#123D73] bg-blue-50"
-                        : "border-slate-300 bg-white hover:bg-slate-50"
-                    }`}
-                  >
-                    <p className="flex items-center gap-2 whitespace-nowrap text-sm font-bold text-slate-600">
-                      {card.dot && (
-                        <span
-                          aria-hidden="true"
-                          className={`h-2 w-2 rounded-full ${card.dot}`}
-                        />
-                      )}
-                      {card.label}
-                    </p>
+                  return (
+                    <button
+                      key={card.value}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setStatus(card.value)}
+                      className={`flex min-h-11 shrink-0 snap-start items-center gap-3 rounded-none! border px-4 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 lg:block lg:p-6 ${
+                        active
+                          ? "border-[#123D73] bg-blue-50"
+                          : "border-slate-300 bg-white hover:bg-slate-50"
+                      }`}
+                    >
+                      <p className="flex items-center gap-2 whitespace-nowrap text-sm font-bold text-slate-600">
+                        {card.dot && (
+                          <span
+                            aria-hidden="true"
+                            className={`h-2 w-2 rounded-full ${card.dot}`}
+                          />
+                        )}
+                        {card.label}
+                      </p>
 
-                    <p className="text-base font-bold text-slate-900 lg:mt-3 lg:text-3xl">
-                      {card.count}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+                      <p className="text-base font-bold text-slate-900 lg:mt-3 lg:text-3xl">
+                        {card.count}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div id="reports" className="space-y-5">
@@ -599,102 +624,102 @@ export default function HistoryContent({
                     id="history-filter-fields"
                     className={`${filtersOpen ? "mt-4 block" : "hidden"} sm:mt-0 sm:block`}
                   >
-                  {/* Date / time period: same tab style as the status filter */}
-                  <div className="mb-4">
-                    <span className={labelClass}>Date / time period</span>
+                    {/* Date / time period: same tab style as the status filter */}
+                    <div className="mb-4">
+                      <span className={labelClass}>Date / time period</span>
 
-                    <div
-                      role="group"
-                      aria-label="Date / time period"
-                      className="flex gap-2"
-                    >
-                      {["Recent", "This month"].map((option) => {
-                        const active = period === option;
+                      <div
+                        role="group"
+                        aria-label="Date / time period"
+                        className="flex gap-2"
+                      >
+                        {["Recent", "This month"].map((option) => {
+                          const active = period === option;
 
-                        return (
-                          <button
-                            key={option}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => setPeriod(option)}
-                            className={`flex min-h-11 flex-1 items-center justify-center rounded-none! border px-4 py-2.5 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 sm:flex-none sm:px-8 ${
-                              active
-                                ? "border-[#123D73] bg-blue-50 text-[#123D73]"
-                                : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                            }`}
-                          >
-                            {option}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
-                    {[
-                      {
-                        id: "history-barangay",
-                        label: "Barangay",
-                        value: barangay,
-                        set: setBarangay,
-                        options: ["All Barangays", ...barangays],
-                      },
-                      {
-                        id: "history-type",
-                        label: "Incident type",
-                        value: type,
-                        set: setType,
-                        options: ["All Incident Types", ...types],
-                      },
-                    ].map((filter) => (
-                      <div key={filter.id} className="min-w-0">
-                        <span className={labelClass}>{filter.label}</span>
-
-                        {/* Same searchable dropdown as the Submit Report form */}
-                        <SearchSelect
-                          value={filter.value}
-                          onChange={filter.set}
-                          ariaLabel={filter.label}
-                          placeholder={filter.label}
-                          searchPlaceholder={`Search ${filter.label.toLowerCase()}...`}
-                          emptyText="No matches found."
-                          options={filter.options.map((option) => ({
-                            value: option,
-                            label: option,
-                          }))}
-                        />
+                          return (
+                            <button
+                              key={option}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => setPeriod(option)}
+                              className={`flex min-h-11 flex-1 items-center justify-center rounded-none! border px-4 py-2.5 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 sm:flex-none sm:px-8 ${
+                                active
+                                  ? "border-[#123D73] bg-blue-50 text-[#123D73]"
+                                  : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              {option}
+                            </button>
+                          );
+                        })}
                       </div>
-                    ))}
-                  </div>
+                    </div>
 
-                  <div className="mt-5 flex flex-col gap-4 border-t border-slate-200 pt-4 sm:mt-6 sm:flex-row sm:items-center sm:justify-between sm:pt-5">
-                    <label className="flex cursor-pointer items-start gap-4 text-base text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={etrOnly}
-                        onChange={(event) => setEtrOnly(event.target.checked)}
-                        className="mt-1 size-5 shrink-0 accent-[#123D73]"
-                      />
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+                      {[
+                        {
+                          id: "history-barangay",
+                          label: "Barangay",
+                          value: barangay,
+                          set: setBarangay,
+                          options: ["All Barangays", ...barangays],
+                        },
+                        {
+                          id: "history-type",
+                          label: "Incident type",
+                          value: type,
+                          set: setType,
+                          options: ["All Incident Types", ...types],
+                        },
+                      ].map((filter) => (
+                        <div key={filter.id} className="min-w-0">
+                          <span className={labelClass}>{filter.label}</span>
 
-                      <span>
-                        <span className="block font-semibold text-slate-800">
-                          Show incidents with an estimated restoration time
+                          {/* Same searchable dropdown as the Submit Report form */}
+                          <SearchSelect
+                            value={filter.value}
+                            onChange={filter.set}
+                            ariaLabel={filter.label}
+                            placeholder={filter.label}
+                            searchPlaceholder={`Search ${filter.label.toLowerCase()}...`}
+                            emptyText="No matches found."
+                            options={filter.options.map((option) => ({
+                              value: option,
+                              label: option,
+                            }))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-5 flex flex-col gap-4 border-t border-slate-200 pt-4 sm:mt-6 sm:flex-row sm:items-center sm:justify-between sm:pt-5">
+                      <label className="flex cursor-pointer items-start gap-4 text-base text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={etrOnly}
+                          onChange={(event) => setEtrOnly(event.target.checked)}
+                          className="mt-1 size-5 shrink-0 accent-[#123D73]"
+                        />
+
+                        <span>
+                          <span className="block font-semibold text-slate-800">
+                            Show incidents with an estimated restoration time
+                          </span>
+                          <span className="mt-1 block text-sm leading-6 text-slate-500">
+                            Only show eligible records that include a
+                            restoration estimate.
+                          </span>
                         </span>
-                        <span className="mt-1 block text-sm leading-6 text-slate-500">
-                          Only show eligible records that include a
-                          restoration estimate.
-                        </span>
-                      </span>
-                    </label>
+                      </label>
 
-                    <button
-                      type="button"
-                      onClick={reset}
-                      className={secondaryButtonClass}
-                    >
-                      Reset filters
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={reset}
+                        className={secondaryButtonClass}
+                      >
+                        Reset filters
+                      </button>
+                    </div>
                   </div>
                 </div>
               </Panel>
@@ -716,28 +741,35 @@ export default function HistoryContent({
                 liveRegion
               >
                 {filtered.length > 0 ? (
-                  <div className="divide-y divide-slate-200">
+                  // Phone: separate cards with a gap between them (grey
+                  // background shows through). sm and up: one continuous
+                  // list divided by thin lines, same as before.
+                  <div className="space-y-3 bg-slate-100 p-3 sm:space-y-0 sm:divide-y sm:divide-slate-200 sm:bg-transparent sm:p-0">
                     {pagedReports.map((report) => (
                       <button
                         key={report.id}
                         type="button"
                         onClick={() => setSelected(report)}
                         aria-label={`View details for ${report.type}, ${report.status}, ${getReportSourceDisplay(report)}`}
-                        className="history-record-row group grid w-full min-w-0 gap-5 rounded-none! border-l-4 border-l-transparent px-5 py-5 text-left transition-colors hover:border-l-[#123D73] hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#123D73] sm:px-6 lg:grid-cols-[190px_minmax(0,1fr)_auto] lg:items-center"
+                        className="history-record-row group grid w-full min-w-0 gap-3 rounded-none! border border-l-4 border-slate-300 border-l-slate-300 bg-white px-4 py-4 text-left transition-colors hover:border-l-[#123D73] hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#123D73] sm:gap-5 sm:border-0 sm:border-l-4 sm:border-l-transparent sm:px-6 sm:py-5 sm:hover:border-l-[#123D73] lg:grid-cols-[190px_minmax(0,1fr)_auto] lg:items-center"
                       >
-                        {/* Date and time */}
+                        {/* Date and time: one line on phone, two lines on larger screens */}
                         <div className="min-w-0 lg:border-r lg:border-slate-200 lg:pr-5">
-                          <p className="text-base font-semibold text-slate-800">
+                          <p className="text-sm font-semibold text-slate-800 sm:text-base">
                             {report.date}
+                            <span className="font-normal text-slate-500 sm:hidden">
+                              {" "}
+                              · {report.time}
+                            </span>
                           </p>
-                          <p className="mt-1 text-sm text-slate-500">
+                          <p className="mt-1 hidden text-sm text-slate-500 sm:block">
                             {report.time}
                           </p>
                         </div>
 
                         {/* Report details */}
                         <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                             <h3 className="wrap-break-word text-lg font-bold text-[#123D73]">
                               {report.type}
                             </h3>
@@ -762,7 +794,10 @@ export default function HistoryContent({
                             </span>
                           </p>
 
-                          <p className="mt-2.5 wrap-break-word text-base leading-7 text-slate-600">
+                          {/* Always visible: the most important info.
+                              On phone it is limited to 2 lines so the card
+                              stays short; the full list is in the modal. */}
+                          <p className="mt-2.5 line-clamp-2 wrap-break-word text-base leading-7 text-slate-600 sm:line-clamp-none">
                             <span className="font-semibold text-slate-700">
                               {getReportAffectedLabel(report)}:
                             </span>{" "}
@@ -770,7 +805,7 @@ export default function HistoryContent({
                               "No affected area recorded."}
                           </p>
 
-                          <p className="mt-1.5 wrap-break-word text-base leading-7 text-slate-600">
+                          <p className="mt-2 wrap-break-word text-base leading-7 text-slate-600 sm:mt-1.5">
                             <span className="font-semibold text-slate-700">
                               Estimated restoration:
                             </span>{" "}
@@ -778,7 +813,8 @@ export default function HistoryContent({
                               "Not provided in this record."}
                           </p>
 
-                          <p className="mt-1.5 wrap-break-word text-base leading-7 text-slate-600">
+                          {/* Hidden on phone to keep the card short. */}
+                          <p className="mt-1.5 hidden wrap-break-word text-base leading-7 text-slate-600 sm:block">
                             <span className="font-semibold text-slate-700">
                               Latest response:
                             </span>{" "}
@@ -787,7 +823,7 @@ export default function HistoryContent({
                         </div>
 
                         {/* View details */}
-                        <span className="flex items-center justify-between gap-3 border-t border-slate-200 pt-4 text-base font-semibold text-[#123D73] sm:justify-end lg:border-0 lg:pt-0">
+                        <span className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3 text-base font-semibold text-[#123D73] sm:justify-end sm:pt-4 lg:border-0 lg:pt-0">
                           <span className="lg:hidden">View report details</span>
 
                           <span className="flex h-11 w-11 shrink-0 items-center justify-center border border-slate-300 bg-white text-[#123D73] transition-colors group-hover:border-[#123D73] group-hover:bg-[#E8EEF6]">
