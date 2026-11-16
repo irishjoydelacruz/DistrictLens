@@ -9,7 +9,7 @@ import { Icon } from "./icons";
 // UI-only: the three header actions share the same height, shape, and icon
 // size, but have three levels of emphasis:
 //   1. Submit Report  = solid red (the main action)
-//   2. Alerts         = soft green tint + border (secondary)
+//   2. Alerts         = soft yellow tint + border (secondary)
 //   3. Staff Login    = ghost (no border or fill until hovered)
 // Phone: three equal columns, 44px tall so they are easy to tap.
 // Tablet and up: each button takes its own natural width, 40px tall.
@@ -23,7 +23,7 @@ const reportAction =
 
 // Soft tint + border
 const alertsAction =
-  "border-emerald-600 bg-emerald-50 text-emerald-700 hover:border-emerald-700 hover:bg-emerald-100 hover:text-emerald-800";
+  "border-amber-500 bg-amber-50 text-amber-700 hover:border-amber-600 hover:bg-amber-100 hover:text-amber-800";
 
 // Ghost: transparent at rest, soft grey fill on hover. A thin divider on the
 // left (tablet and up) separates it from the other two actions.
