@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { usernameToEmail, USERNAME_EMAIL_DOMAIN } from "@/lib/username";
 
 const ALLOWED_ROLES = [
   "super_admin",
@@ -65,6 +64,14 @@ function isValidRole(value: unknown): value is UserRole {
   return (
     typeof value === "string" && ALLOWED_ROLES.includes(value as UserRole)
   );
+}
+
+function readEmail(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 254;
 }
 
 function readTeamId(value: unknown): string | null {
@@ -157,12 +164,18 @@ export async function POST(request: Request) {
     const role = body.role;
     const teamId = readTeamId(body.teamId);
 
-    // Internal login identifier derived from the name (never shown to users).
-    const email = usernameToEmail(fullName);
+    const email = readEmail(body.email);
 
-    if (!fullName || !email || !isValidRole(role)) {
+    if (!fullName || !isValidRole(role)) {
       return NextResponse.json(
         { error: "Enter a valid name and role." },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidEmail(email)) {
+      return NextResponse.json(
+        { error: "Enter a valid email address." },
         { status: 400 }
       );
     }
@@ -174,9 +187,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Reject duplicate names (the derived login would be identical).
-    const { data: existingProfiles, error: existingError } =
-      await adminSupabase.from("profiles").select("id, full_name");
+    // Reject an email that is already used by another account.
+    const { data: emailTaken, error: existingError } = await adminSupabase
+      .from("profiles")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
 
     if (existingError) {
       return NextResponse.json(
@@ -185,16 +201,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      (existingProfiles ?? []).some(
-        (item) => usernameToEmail(item.full_name ?? "") === email
-      )
-    ) {
+    if (emailTaken) {
       return NextResponse.json(
-        {
-          error:
-            "An account with this name already exists. Add a distinguishing detail, such as a middle initial.",
-        },
+        { error: "An account with this email already exists." },
         { status: 409 }
       );
     }
@@ -225,6 +234,7 @@ export async function POST(request: Request) {
         {
           id: newUserId,
           full_name: fullName,
+          email,
           role,
           status: "approved", // accounts created by the admin are pre-approved
           team_id: role === "field_worker" ? teamId : null,
@@ -256,6 +266,7 @@ export async function POST(request: Request) {
         user: {
           id: newUserId,
           fullName,
+          email,
           role,
         },
         temporaryPassword,
@@ -449,16 +460,24 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ message: "Account approved." });
     }
 
-    // ---------- Update name, role and team ----------
+    // ---------- Update name, email, role and team ----------
     const id = typeof body.id === "string" ? body.id : "";
     const fullName =
       typeof body.fullName === "string" ? body.fullName.trim() : "";
     const role = body.role;
     const teamId = readTeamId(body.teamId);
+    const newEmail = readEmail(body.email);
 
     if (!id || !fullName || !isValidRole(role)) {
       return NextResponse.json(
         { error: "User ID, full name, and valid role are required." },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidEmail(newEmail)) {
+      return NextResponse.json(
+        { error: "Enter a valid email address." },
         { status: 400 }
       );
     }
@@ -530,65 +549,54 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const previousEmail = currentAuth.user.email ?? "";
+    const previousEmail = (currentAuth.user.email ?? "").toLowerCase();
+    const emailChanged = previousEmail !== newEmail;
 
-    // Only accounts with a generated login (name@districtlens.local) follow
-    // the name. Accounts that signed up with a real email or Google keep it.
-    const usesGeneratedLogin = previousEmail.endsWith(
-      `@${USERNAME_EMAIL_DOMAIN}`
-    );
-
-    const newEmail = usesGeneratedLogin ? usernameToEmail(fullName) : "";
-
-    if (usesGeneratedLogin) {
-      if (!newEmail) {
-        return NextResponse.json(
-          { error: "Enter a valid name." },
-          { status: 400 }
-        );
-      }
-
-      const { data: others, error: othersError } = await adminSupabase
+    if (emailChanged) {
+      // The email must not belong to another account.
+      const { data: emailTaken, error: emailCheckError } = await adminSupabase
         .from("profiles")
-        .select("id, full_name")
-        .neq("id", id);
+        .select("id")
+        .eq("email", newEmail)
+        .neq("id", id)
+        .maybeSingle();
 
-      if (othersError) {
+      if (emailCheckError) {
         return NextResponse.json(
           { error: "Unable to check existing accounts." },
           { status: 500 }
         );
       }
 
-      if (
-        (others ?? []).some(
-          (item) => usernameToEmail(item.full_name ?? "") === newEmail
-        )
-      ) {
+      if (emailTaken) {
         return NextResponse.json(
-          {
-            error:
-              "Another account already uses this name. Add a distinguishing detail, such as a middle initial.",
-          },
+          { error: "Another account already uses this email." },
           { status: 409 }
         );
       }
 
-      if (previousEmail !== newEmail) {
-        const { error: emailError } =
-          await adminSupabase.auth.admin.updateUserById(id, {
-            email: newEmail,
-            email_confirm: true,
-          });
+      // Changes the login email. The password stays the same.
+      const { error: emailError } =
+        await adminSupabase.auth.admin.updateUserById(id, {
+          email: newEmail,
+          email_confirm: true,
+        });
 
-        if (emailError) {
-          console.error("UPDATE AUTH EMAIL ERROR:", emailError.message);
+      if (emailError) {
+        console.error("UPDATE AUTH EMAIL ERROR:", emailError.message);
 
-          return NextResponse.json(
-            { error: "Unable to update the login name." },
-            { status: 500 }
-          );
-        }
+        const alreadyUsed = /already|registered|exists/i.test(
+          emailError.message
+        );
+
+        return NextResponse.json(
+          {
+            error: alreadyUsed
+              ? "Another account already uses this email."
+              : "Unable to update the login email.",
+          },
+          { status: alreadyUsed ? 409 : 500 }
+        );
       }
     }
 
@@ -596,6 +604,7 @@ export async function PATCH(request: Request) {
       .from("profiles")
       .update({
         full_name: fullName,
+        email: newEmail,
         role,
         team_id: role === "field_worker" ? teamId : null,
       })
@@ -604,8 +613,8 @@ export async function PATCH(request: Request) {
     if (updateError) {
       console.error("UPDATE PROFILE ERROR:", updateError.message);
 
-      // Roll the login identifier back so name and login stay matched.
-      if (usesGeneratedLogin && previousEmail && previousEmail !== newEmail) {
+      // Roll the login email back so profile and login stay matched.
+      if (emailChanged && previousEmail) {
         await adminSupabase.auth.admin.updateUserById(id, {
           email: previousEmail,
           email_confirm: true,

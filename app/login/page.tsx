@@ -1,18 +1,21 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { usernameToEmail } from "@/lib/username";
 
-// UI-only class tokens (same look as the admin login).
+const DISTRICTLENS_LOGO = "/images/districtlenslogo.png";
+
+// UI class tokens
 const inputClass =
-  "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 transition-colors focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20";
-const labelClass = "mb-2 block text-sm font-semibold text-slate-800";
+  "w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition-colors focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20";
+
+const labelClass = "mb-1.5 block text-sm font-semibold text-slate-800";
+
 const btnPrimary =
-  "w-full rounded-xl bg-[#123D73] px-4 py-3.5 text-base font-bold uppercase tracking-[0.15em] text-white transition hover:bg-[#0D2F59] disabled:cursor-not-allowed disabled:opacity-50";
+  "w-full rounded-xl bg-[#123D73] px-4 py-3 text-sm font-bold uppercase tracking-[0.12em] text-white transition hover:bg-[#0D2F59] disabled:cursor-not-allowed disabled:opacity-50";
 
 const QUERY_ERRORS: Record<string, string> = {
   profile: "Unable to verify your account. Please sign in again.",
@@ -25,9 +28,10 @@ const QUERY_ERRORS: Record<string, string> = {
 };
 
 function LoginForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [username, setUsername] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(
@@ -38,30 +42,16 @@ function LoginForm() {
   const noticeParam = searchParams.get("notice");
   const notice =
     noticeParam === "reset"
-      ? "Password updated. You can now sign in."
+      ? "Password updated. You can now log in."
       : noticeParam === "verified"
-      ? "Email verified. Wait for the administrator to approve your account, then sign in."
+      ? "Email verified. Wait for the administrator to approve your account, then log in."
       : "";
 
-  // "Forgot password": email gets a reset link, username notifies the admin
-  const [forgotOpen, setForgotOpen] = useState(false);
-  const [forgotName, setForgotName] = useState("");
-  const [forgotBusy, setForgotBusy] = useState(false);
-  const [forgotMessage, setForgotMessage] = useState("");
-  const [forgotError, setForgotError] = useState("");
+  const [year, setYear] = useState<number | null>(null);
 
-  async function handleGoogle() {
-    setError("");
-    const supabase = createClient();
-    const { error: googleError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-
-    if (googleError) {
-      setError("Unable to start Google sign-in. Please try again.");
-    }
-  }
+  useEffect(() => {
+    setYear(new Date().getFullYear());
+  }, []);
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -70,15 +60,10 @@ function LoginForm() {
 
     const supabase = createClient();
 
-    // An email is used as typed; anything else is a username (full name or
-    // team name) and is converted to its internal login.
-    const identifier = username.trim();
-    const email = identifier.includes("@")
-      ? identifier.toLowerCase()
-      : usernameToEmail(identifier);
+    const email = identifier.trim().toLowerCase();
 
     if (!email) {
-      setError("Please enter your email or username.");
+      setError("Please enter your email.");
       setLoading(false);
       return;
     }
@@ -91,7 +76,7 @@ function LoginForm() {
       });
 
       if (loginError) {
-        setError("Invalid email/username or password.");
+        setError("Invalid email or password.");
         return;
       }
 
@@ -138,342 +123,391 @@ function LoginForm() {
     }
   }
 
-  async function handleForgot(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setForgotError("");
-    setForgotMessage("");
-    setForgotBusy(true);
+  async function handleGoogleLogin() {
+    setError("");
 
-    try {
-      const value = forgotName.trim();
+    const supabase = createClient();
+    const { error: googleError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
 
-      // Real email: Supabase sends the reset link.
-      if (value.includes("@")) {
-        const supabase = createClient();
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-          value.toLowerCase(),
-          {
-            redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-          }
-        );
-
-        if (resetError) {
-          setForgotError("Unable to send the reset email. Please try again.");
-          return;
-        }
-
-        setForgotMessage(
-          "If this email is registered, a reset link has been sent. Check your inbox and spam folder."
-        );
-        return;
-      }
-
-      // Username: notify the administrator (existing flow).
-      const response = await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: value }),
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        setForgotError(result.error ?? "Unable to send your request.");
-        return;
-      }
-
-      setForgotMessage(result.message);
-    } catch {
-      setForgotError("Something went wrong. Please try again.");
-    } finally {
-      setForgotBusy(false);
+    if (googleError) {
+      setError("Unable to start Google sign-in. Please try again.");
     }
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-white text-slate-800">
-      {/* HEADER */}
-      <header className="border-b border-t-4 border-slate-200 border-t-[#123D73] bg-white">
-        <div className="mx-auto flex min-h-22 max-w-[1600px] items-center px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="relative h-14 w-14 shrink-0 sm:h-16 sm:w-16">
+    <div className="min-h-dvh w-full bg-white">
+      {/* HEADER: logo and button both go back to the public portal */}
+      <header className="sticky top-0 z-50 h-16 w-full border-b border-slate-200 bg-white">
+        <div className="mx-auto flex h-full w-full max-w-[1700px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <Link
+            href="/"
+            aria-label="Back to the Tanza Water District public portal"
+            className="flex min-w-0 items-center gap-3 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#123D73] focus-visible:ring-offset-2"
+          >
+            {/* TWD LOGO */}
+            <div className="relative h-11 w-11 shrink-0 sm:h-12 sm:w-12">
               <Image
                 src="/images/twd-logo.jpg"
                 alt="Tanza Water District official logo"
                 fill
-                sizes="64px"
-                className="object-contain"
+                sizes="48px"
+                className="rounded-full object-contain"
                 priority
               />
             </div>
 
-            <p className="truncate text-base font-bold tracking-tight text-[#123D73] sm:text-xl">
+            {/* TWD NAME */}
+            <p className="truncate text-sm font-bold tracking-tight text-[#123D73] sm:text-lg">
               Tanza Water District
             </p>
-          </div>
+          </Link>
+
+          {/* BACK TO PUBLIC PORTAL */}
+          <Link
+            href="/"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#123D73] px-3.5 py-2 text-sm font-semibold text-[#123D73] transition hover:bg-[#123D73] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#123D73] focus-visible:ring-offset-2"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="M19 12H5" />
+              <path d="m12 19-7-7 7-7" />
+            </svg>
+            <span className="hidden sm:inline">Back to public portal</span>
+            <span className="sm:hidden">Back</span>
+          </Link>
         </div>
       </header>
 
-      {/* SPLIT LAYOUT */}
-      <main className="grid flex-1 md:grid-cols-2">
-        {/* Brand side */}
-        <section className="flex flex-col items-center justify-center bg-linear-to-br from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-12 text-center">
-          <div className="relative h-44 w-44 shrink-0 rounded-full border-4 border-white/30 bg-white p-3 shadow-md sm:h-56 sm:w-56 lg:h-72 lg:w-72">
+      {/* MAIN SPLIT LAYOUT */}
+      <main className="grid min-h-[calc(100dvh-64px)] grid-cols-1 md:grid-cols-2">
+        {/* LEFT BRANDING (desktop and tablet only) */}
+        <section className="relative hidden flex-col items-center justify-center overflow-hidden bg-linear-to-br from-[#E6F0FA] via-[#DDF0F8] to-[#C6E9F5] px-6 py-12 md:flex md:min-h-[calc(100dvh-64px)]">
+          {/* SOFT GLOW BEHIND LOGO */}
+          <div
+            className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-[65%] rounded-full bg-white/60 blur-3xl"
+            aria-hidden="true"
+          />
+
+          {/* DISTRICTLENS LOGO */}
+          <div className="relative mx-auto mb-5 h-28 w-28 sm:h-32 sm:w-32 lg:h-40 lg:w-40">
             <Image
-              src="/images/twd-logo.jpg"
-              alt="Tanza Water District official logo"
+              src={DISTRICTLENS_LOGO}
+              alt="DistrictLens Logo"
               fill
-              sizes="(min-width: 1024px) 288px, (min-width: 640px) 224px, 176px"
-              className="rounded-full object-contain p-3"
               priority
+              sizes="(max-width: 1024px) 128px, 160px"
+              className="object-contain"
             />
           </div>
 
-          <h2 className="mt-8 text-4xl font-extrabold uppercase tracking-tight text-white sm:text-5xl">
-            DistrictLens
-          </h2>
+          {/* BRAND NAME */}
+          <h1 className="relative text-center text-2xl font-black tracking-tight sm:text-3xl lg:text-4xl">
+            <span className="text-[#123D73]">District</span>
+            <span className="text-[#007AA3]">Lens</span>
+          </h1>
 
-          <p className="mt-2 text-sm font-medium text-indigo-100 sm:text-base">
-            Tanza Water District Staff Portal
-          </p>
-
-          <p className="mt-3 flex items-center gap-4 text-sm text-indigo-200">
+          {/* BRAND TAGLINE */}
+          <p className="relative mt-4 flex flex-wrap items-center justify-center gap-2 text-center text-sm font-semibold tracking-wide text-[#123D73] lg:text-base">
             <span>Monitor</span>
+            <span className="text-[#007AA3]">╼</span>
             <span>Report</span>
+            <span className="text-[#007AA3]">╼</span>
             <span>Locate</span>
           </p>
+
+          {/* DESCRIPTION */}
+          <p className="relative mt-2 max-w-70 text-center text-sm leading-5 text-slate-700 font-medium">
+            Operations Dashboard and Incident Monitoring System
+          </p>
+
+          {/* BOTTOM WAVE */}
+          <svg
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-24 w-full"
+            viewBox="0 0 1440 120"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M0 64 C240 100 480 100 720 64 C960 28 1200 28 1440 64 L1440 120 L0 120 Z"
+              fill="#00A6D6"
+              fillOpacity="0.18"
+            />
+            <path
+              d="M0 84 C240 112 480 112 720 84 C960 56 1200 56 1440 84 L1440 120 L0 120 Z"
+              fill="#123D73"
+              fillOpacity="0.14"
+            />
+          </svg>
         </section>
 
-        {/* Login side */}
-        <section className="flex items-center justify-center px-6 py-12 sm:px-10">
-          <div className="w-full max-w-md">
-            <h2 className="text-2xl font-bold text-[#123D73] sm:text-3xl">
-              Login
-            </h2>
+        {/* RIGHT SIDE: LOGIN + FOOTER */}
+        <div className="flex min-h-140 flex-col md:min-h-[calc(100dvh-64px)] md:border-l md:border-slate-200">
+          {/* LOGIN FORM */}
+          <section className="flex flex-1 items-center justify-center px-5 py-8 sm:px-10 lg:px-14">
+            <div className="relative z-10 my-auto w-full max-w-100">
+              {/* WELCOME HEADER */}
+              <div className="mb-5 text-center md:hidden">
+                {/* MOBILE LOGO AND BRANDING */}
+                <div className="mb-4 flex flex-col items-center md:hidden">
+                  <div className="flex items-center justify-center gap-4">
+                    <div className="relative h-14 w-14 shrink-0">
+                      <Image
+                        src={DISTRICTLENS_LOGO}
+                        alt="DistrictLens Logo"
+                        fill
+                        priority
+                        sizes="56px"
+                        className="object-contain"
+                      />
+                    </div>
 
-            <p className="mt-1 text-sm text-slate-600">
-              Enter your email or username and password
-            </p>
+                    <div className="h-10 w-px bg-slate-200" />
 
-            <form onSubmit={handleLogin} className="mt-8 space-y-6">
-              <div>
-                <label htmlFor="username" className={labelClass}>
-                  Email or Username
-                </label>
+                    <div className="flex flex-col text-left">
+                      <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">
+                        <span className="text-[#123D73]">District</span>
+                        <span className="text-[#00A6D6]">Lens</span>
+                      </h1>
 
-                <div className="relative">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="8" r="4" />
-                    <path
-                      d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6"
-                      strokeLinecap="round"
-                    />
-                  </svg>
+                      <p className="mt-1 text-[10px] font-bold tracking-[0.2em] text-slate-400">
+                        AUTHORIZED PERSONNEL
+                      </p>
+                    </div>
+                  </div>
 
-                  <input
-                    id="username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                    autoComplete="username"
-                    className={`${inputClass} pl-11`}
-                    placeholder="Email, full name or team name"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="password" className={labelClass}>
-                  Password
-                </label>
-
-                <div className="relative">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400"
-                    aria-hidden="true"
-                  >
-                    <rect x="5" y="11" width="14" height="9" rx="2" />
-                    <path
-                      d="M8 11V8a4 4 0 0 1 8 0v3"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-
-                  <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                    className={`${inputClass} pl-11 pr-16`}
-                    placeholder="Enter your password"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((current) => !current)}
-                    aria-label={
-                      showPassword ? "Hide password" : "Show password"
-                    }
-                    className="absolute inset-y-0 right-0 px-4 text-xs font-semibold text-slate-500 hover:text-[#123D73]"
-                  >
-                    {showPassword ? "Hide" : "Show"}
-                  </button>
-                </div>
-              </div>
-
-              {notice && (
-                <p
-                  role="status"
-                  className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
-                >
-                  {notice}
-                </p>
-              )}
-
-              {error && (
-                <p
-                  role="alert"
-                  className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
-                >
-                  {error}
-                </p>
-              )}
-
-              <button type="submit" disabled={loading} className={btnPrimary}>
-                {loading ? "Signing in..." : "Login"}
-              </button>
-            </form>
-
-            {/* GOOGLE + REGISTER */}
-            <div className="my-5 flex items-center gap-3 text-xs text-slate-400">
-              <span className="h-px flex-1 bg-slate-200" />
-              or
-              <span className="h-px flex-1 bg-slate-200" />
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGoogle}
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              Continue with Google
-            </button>
-
-            <p className="mt-4 text-center text-sm text-slate-600">
-              No account yet?{" "}
-              <Link
-                href="/register"
-                className="font-medium text-[#123D73] underline-offset-2 hover:underline"
-              >
-                Request an account
-              </Link>
-            </p>
-
-            {/* FORGOT PASSWORD */}
-            <div className="mt-6 border-t border-slate-200 pt-5">
-              {!forgotOpen ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotOpen(true);
-                    setForgotName(username);
-                  }}
-                  className="text-sm font-medium text-[#123D73] underline-offset-2 hover:underline"
-                >
-                  Forgot password?
-                </button>
-              ) : (
-                <form onSubmit={handleForgot} className="space-y-3">
-                  <p className="text-sm text-slate-600">
-                    Enter your email to receive a reset link. If your account
-                    has no email, enter your username and the administrator
-                    will give you a temporary password.
+                  <p className="mt-3 max-w-sm text-center text-sm leading-5 text-slate-500">
+                    Operations Dashboard and Incident Monitoring System
                   </p>
+                </div>
 
-                  <input
-                    type="text"
-                    value={forgotName}
-                    onChange={(e) => setForgotName(e.target.value)}
-                    required
-                    aria-label="Email or username"
-                    placeholder="Email or username"
-                    className={inputClass}
-                  />
+              </div>
 
-                  {forgotError && (
-                    <p
-                      role="alert"
-                      className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+              {/* LOGIN TITLE */}
+              <p className="font-sans text-xl font-semibold text-[#123D73] lg:text-2xl">
+                Log In to your account
+              </p>
+
+              {/* LOGIN FORM */}
+              <form onSubmit={handleLogin} className="mt-4 space-y-4">
+                {/* EMAIL ADDRESS */}
+                <div>
+                  <label htmlFor="identifier" className={labelClass}>
+                    Email Address
+                  </label>
+
+                  <div className="relative">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-[#123D73]/60"
+                      aria-hidden="true"
                     >
-                      {forgotError}
-                    </p>
-                  )}
+                      <circle cx="12" cy="8" r="4" />
+                      <path
+                        d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6"
+                        strokeLinecap="round"
+                      />
+                    </svg>
 
-                  {forgotMessage && (
-                    <p
-                      role="status"
-                      className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
+                    <input
+                      id="identifier"
+                      type="email"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      required
+                      autoComplete="email"
+                      className={`${inputClass} pl-11`}
+                      placeholder="Enter your email"
+                    />
+                  </div>
+                </div>
+
+                {/* PASSWORD */}
+                <div>
+                  <label htmlFor="password" className={labelClass}>
+                    Password
+                  </label>
+
+                  <div className="relative">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-[#123D73]/60"
+                      aria-hidden="true"
                     >
-                      {forgotMessage}
-                    </p>
-                  )}
+                      <rect x="5" y="11" width="14" height="9" rx="2" />
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3" strokeLinecap="round" />
+                    </svg>
 
-                  <div className="flex items-center gap-4">
-                    <button
-                      type="submit"
-                      disabled={forgotBusy}
-                      className="rounded-xl bg-[#123D73] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0D2F59] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {forgotBusy ? "Sending..." : "Send request"}
-                    </button>
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      autoComplete="current-password"
+                      className={`${inputClass} pl-11 pr-16`}
+                      placeholder="Enter your password"
+                    />
 
+                    {/* SHOW / HIDE PASSWORD */}
                     <button
                       type="button"
-                      onClick={() => {
-                        setForgotOpen(false);
-                        setForgotMessage("");
-                        setForgotError("");
-                      }}
-                      className="text-sm font-medium text-slate-600 hover:underline"
+                      onClick={() => setShowPassword((current) => !current)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      className="absolute inset-y-0 right-0 flex cursor-pointer items-center px-4 text-slate-500 transition hover:text-[#123D73]"
                     >
-                      Cancel
+                      {showPassword ? (
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-5 w-5"
+                          aria-hidden="true"
+                        >
+                          <path d="M3 3l18 18" />
+                          <path d="M10.6 10.6a2 2 0 002.8 2.8" />
+                          <path d="M9.9 5.2A10.8 10.8 0 0112 5c5 0 9 4 10 7-0.4 1.2-1.3 2.5-2.5 3.5" />
+                          <path d="M6.2 6.2C3.8 7.5 2.4 9.5 2 12c1 3 5 7 10 7 1.2 0 2.3-.2 3.3-.6" />
+                        </svg>
+                      ) : (
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-5 w-5"
+                          aria-hidden="true"
+                        >
+                          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )}
                     </button>
                   </div>
-                </form>
-              )}
-            </div>
+                </div>
 
-            <div className="mt-5">
-              <Link
-                href="/"
-                className="text-sm font-medium text-[#123D73] underline-offset-2 hover:underline"
+                {/* NOTICE MESSAGE */}
+                {notice && (
+                  <p
+                    role="status"
+                    className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
+                  >
+                    {notice}
+                  </p>
+                )}
+
+                {/* ERROR MESSAGE */}
+                {error && (
+                  <p
+                    role="alert"
+                    className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+                  >
+                    {error}
+                  </p>
+                )}
+
+                {/* FORGOT PASSWORD */}
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => router.push("/forgot-password")}
+                    className="cursor-pointer text-sm font-medium text-[#123D73] transition-colors hover:text-[#087E87] hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+
+                {/* LOGIN BUTTON */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className={`${btnPrimary} cursor-pointer shadow-md transition-all hover:brightness-110`}
+                >
+                  {loading ? "Logging in..." : "LOGIN"}
+                </button>
+              </form>
+
+              {/* DIVIDER */}
+              <div className="relative flex items-center py-3">
+                <div className="grow border-t border-slate-200" />
+                <span className="mx-4 text-xs font-medium uppercase text-slate-400">
+                  OR
+                </span>
+                <div className="grow border-t border-slate-200" />
+              </div>
+
+              {/* GOOGLE LOGIN BUTTON */}
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-[#123D73] hover:bg-slate-50"
               >
-                Back to public portal
-              </Link>
-            </div>
-          </div>
-        </section>
-      </main>
+                <svg viewBox="0 0 48 48" className="h-5 w-5" aria-hidden="true">
+                  <path
+                    fill="#EA4335"
+                    d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+                  />
+                  <path
+                    fill="#4285F4"
+                    d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.75 7.18l7.98 6.19c4.65-4.3 6.81-10.62 6.81-17.84z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.52 2.56 10.78l7.97-6.19z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M24 48c6.48 0 11.93-2.13 15.91-5.81l-7.98-6.19c-2.15 1.45-4.89 2.3-7.93 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+                  />
+                </svg>
+                Continue with Google
+              </button>
 
-      {/* FOOTER */}
-      <footer className="border-t border-slate-200 bg-white px-6 py-5 text-center">
-        <p className="text-xs text-slate-500">
-          &copy; {new Date().getFullYear()} SerbisyON. All rights reserved.
-        </p>
-      </footer>
+              {/* SIGN UP */}
+              <p className="mt-4 border-t border-slate-200 pt-4 text-center text-sm text-slate-500">
+                Don&apos;t have an account yet?{" "}
+                <button
+                  type="button"
+                  onClick={() => router.push("/signup")}
+                  className="cursor-pointer font-semibold text-[#123D73] hover:underline"
+                >
+                  Sign Up
+                </button>
+              </p>
+            </div>
+          </section>
+
+          {/* FOOTER */}
+          <footer className="flex min-h-16 shrink-0 items-center justify-center">
+            <p className="text-center text-xs text-slate-500">
+              &copy; {year} SerbisyON. All rights reserved.
+            </p>
+          </footer>
+        </div>
+      </main>
     </div>
   );
 }

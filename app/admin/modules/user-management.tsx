@@ -47,6 +47,7 @@ type TeamOption = { id: string; name: string };
 type CreatedUser = {
   id: string;
   fullName: string;
+  email: string;
   role: UserRole;
   temporaryPassword: string;
 };
@@ -117,6 +118,7 @@ export default function UserManagement() {
     useState<ManagedUser | null>(null);
 
   const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [role, setRole] =
     useState<UserRole>("customer_service");
   const [teamId, setTeamId] = useState("");
@@ -247,6 +249,7 @@ export default function UserManagement() {
   // Reset and close forms
   function resetForm() {
     setFullName("");
+    setEmail("");
     setRole("customer_service");
     setTeamId("");
     setShowAddForm(false);
@@ -262,6 +265,7 @@ export default function UserManagement() {
 
     setEditingUser(null);
     setFullName("");
+    setEmail("");
     setRole("customer_service");
     setTeamId("");
     setShowAddForm(true);
@@ -277,6 +281,7 @@ export default function UserManagement() {
     setEditingUser(user);
 
     setFullName(user.fullName ?? "");
+    setEmail(user.email ?? "");
     setRole(user.role);
     setTeamId(user.teamId ?? "");
   }
@@ -292,6 +297,11 @@ export default function UserManagement() {
 
     if (!fullName.trim()) {
       setError("Please enter the user's full name.");
+      return;
+    }
+
+    if (!email.trim()) {
+      setError("Please enter the user's email address.");
       return;
     }
 
@@ -315,11 +325,13 @@ export default function UserManagement() {
             ? {
                 id: editingUser!.id,
                 fullName: fullName.trim(),
+                email: email.trim(),
                 role,
                 teamId: role === "field_worker" ? teamId : null,
               }
             : {
                 fullName: fullName.trim(),
+                email: email.trim(),
                 role,
                 teamId: role === "field_worker" ? teamId : null,
               }
@@ -349,6 +361,7 @@ export default function UserManagement() {
             id: newUser.id,
             fullName:
               newUser.fullName ?? fullName.trim(),
+            email: newUser.email ?? email.trim().toLowerCase(),
             role: newUser.role ?? role,
             temporaryPassword: data.temporaryPassword,
           });
@@ -803,7 +816,7 @@ export default function UserManagement() {
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
                 <label htmlFor="fullName" className={labelClass}>
-                  Username (Full Name)
+                  Full Name
                 </label>
 
                 <input
@@ -815,9 +828,26 @@ export default function UserManagement() {
                   required
                   className={`${inputBase} px-3 py-2.5`}
                 />
+              </div>
+
+              <div>
+                <label htmlFor="newEmail" className={labelClass}>
+                  Email Address
+                </label>
+
+                <input
+                  id="newEmail"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="e.g. juan@example.com"
+                  required
+                  autoComplete="off"
+                  className={`${inputBase} px-3 py-2.5`}
+                />
 
                 <p className="mt-1.5 text-xs text-slate-500">
-                  The user signs in with this exact name and their password.
+                  The user signs in with this email and the temporary password.
                 </p>
               </div>
 
@@ -907,7 +937,11 @@ export default function UserManagement() {
                 </p>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Sign in with this name as the username.
+                  Sign in with the email{" "}
+                  <span className="font-semibold text-slate-700">
+                    {createdUser.email}
+                  </span>
+                  .
                 </p>
 
                 <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -1104,9 +1138,13 @@ export default function UserManagement() {
                             {user.fullName || "Unnamed User"}
                           </p>
 
-                          {user.email && (
+                          {user.email ? (
                             <p className="mt-0.5 text-xs text-slate-500">
                               {user.email}
+                            </p>
+                          ) : (
+                            <p className="mt-0.5 text-xs font-medium text-amber-700">
+                              No email set. Edit to add one.
                             </p>
                           )}
 
@@ -1319,9 +1357,7 @@ export default function UserManagement() {
                 <div className="space-y-6">
                   <div>
                     <label htmlFor="edit-fullName" className={labelClass}>
-                      {editingUser.email
-                        ? "Full Name"
-                        : "Username (Full Name)"}
+                      Full Name
                     </label>
 
                     <input
@@ -1334,11 +1370,27 @@ export default function UserManagement() {
                       autoFocus
                       className={`${inputBase} px-3 py-2.5`}
                     />
+                  </div>
+
+                  <div>
+                    <label htmlFor="edit-email" className={labelClass}>
+                      Email Address
+                    </label>
+
+                    <input
+                      id="edit-email"
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="Enter email address"
+                      required
+                      autoComplete="off"
+                      className={`${inputBase} px-3 py-2.5`}
+                    />
 
                     <p className="mt-1.5 text-xs text-slate-500">
-                      {editingUser.email
-                        ? `This account signs in with ${editingUser.email}. Changing the name does not change the email.`
-                        : "Changing the name also changes what the user types to sign in."}
+                      This is the email the user signs in with. Their password
+                      stays the same.
                     </p>
                   </div>
 
