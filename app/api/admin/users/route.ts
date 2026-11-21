@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { usernameToEmail } from "@/lib/username";
+import { usernameToEmail, USERNAME_EMAIL_DOMAIN } from "@/lib/username";
 
 const ALLOWED_ROLES = [
   "super_admin",
@@ -63,12 +63,15 @@ async function verifySuperAdmin() {
 
 function isValidRole(value: unknown): value is UserRole {
   return (
-    typeof value === "string" &&
-    ALLOWED_ROLES.includes(value as UserRole)
+    typeof value === "string" && ALLOWED_ROLES.includes(value as UserRole)
   );
 }
 
-// GET: Read all accounts
+function readTeamId(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
+}
+
+// GET: Read all accounts + the list of teams
 export async function GET() {
   try {
     const access = await verifySuperAdmin();
@@ -77,11 +80,12 @@ export async function GET() {
 
     const { adminSupabase } = access;
 
-    const { data: profiles, error: profilesError } =
-      await adminSupabase
-        .from("profiles")
-        .select("id, full_name, role, must_change_password")
-        .order("full_name", { ascending: true });
+    const { data: profiles, error: profilesError } = await adminSupabase
+      .from("profiles")
+      .select(
+        "id, full_name, email, role, status, team_id, must_change_password"
+      )
+      .order("full_name", { ascending: true });
 
     if (profilesError) {
       console.error("GET PROFILES ERROR:", profilesError.message);
@@ -106,15 +110,27 @@ export async function GET() {
       (requests ?? []).map((item) => item.user_id as string)
     );
 
+    const { data: teams, error: teamsError } = await adminSupabase
+      .from("teams")
+      .select("id, name")
+      .order("name", { ascending: true });
+
+    if (teamsError) {
+      console.error("GET TEAMS ERROR:", teamsError.message);
+    }
+
     const users = (profiles ?? []).map((profile) => ({
       id: profile.id,
       fullName: profile.full_name,
+      email: profile.email ?? null,
       role: profile.role,
+      status: profile.status,
+      teamId: profile.team_id ?? null,
       mustChangePassword: profile.must_change_password,
       resetRequested: requestedIds.has(profile.id),
     }));
 
-    return NextResponse.json({ users });
+    return NextResponse.json({ users, teams: teams ?? [] });
   } catch (error) {
     console.error("GET USERS ERROR:", error);
 
@@ -125,7 +141,7 @@ export async function GET() {
   }
 }
 
-// POST: Create account
+// POST: Create account (pre-approved, with a temporary password)
 export async function POST(request: Request) {
   try {
     const access = await verifySuperAdmin();
@@ -139,6 +155,7 @@ export async function POST(request: Request) {
       typeof body.fullName === "string" ? body.fullName.trim() : "";
 
     const role = body.role;
+    const teamId = readTeamId(body.teamId);
 
     // Internal login identifier derived from the name (never shown to users).
     const email = usernameToEmail(fullName);
@@ -146,6 +163,13 @@ export async function POST(request: Request) {
     if (!fullName || !email || !isValidRole(role)) {
       return NextResponse.json(
         { error: "Enter a valid name and role." },
+        { status: 400 }
+      );
+    }
+
+    if (role === "field_worker" && !teamId) {
+      return NextResponse.json(
+        { error: "Select a team for field accounts." },
         { status: 400 }
       );
     }
@@ -194,14 +218,21 @@ export async function POST(request: Request) {
 
     const newUserId = data.user.id;
 
+    // upsert: the new-signup trigger may already have created a row.
     const { error: profileError } = await adminSupabase
       .from("profiles")
-      .insert({
-        id: newUserId,
-        full_name: fullName,
-        role,
-        must_change_password: true,
-      });
+      .upsert(
+        {
+          id: newUserId,
+          full_name: fullName,
+          role,
+          status: "approved", // accounts created by the admin are pre-approved
+          team_id: role === "field_worker" ? teamId : null,
+          must_change_password: true,
+          provider: "password",
+        },
+        { onConflict: "id" }
+      );
 
     if (profileError) {
       console.error("PROFILE CREATION ERROR:", profileError.message);
@@ -241,7 +272,7 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH: Update account name and role
+// PATCH: reset password, approve / reject, or update name, role and team
 export async function PATCH(request: Request) {
   try {
     const access = await verifySuperAdmin();
@@ -251,7 +282,7 @@ export async function PATCH(request: Request) {
     const { user: currentUser, adminSupabase } = access;
     const body = await request.json();
 
-    // Reset a user's password (Super Admin only).
+    // ---------- Reset a user's password ----------
     if (body.action === "reset-password") {
       const targetId = typeof body.id === "string" ? body.id : "";
 
@@ -329,14 +360,112 @@ export async function PATCH(request: Request) {
       });
     }
 
+    // ---------- Approve or reject a pending account ----------
+    if (body.action === "approve" || body.action === "reject") {
+      const targetId = typeof body.id === "string" ? body.id : "";
+
+      if (!targetId) {
+        return NextResponse.json(
+          { error: "User ID is required." },
+          { status: 400 }
+        );
+      }
+
+      if (targetId === currentUser.id) {
+        return NextResponse.json(
+          { error: "You cannot change your own account status." },
+          { status: 400 }
+        );
+      }
+
+      if (body.action === "reject") {
+        const { error: rejectError } = await adminSupabase
+          .from("profiles")
+          .update({ status: "rejected" })
+          .eq("id", targetId);
+
+        if (rejectError) {
+          console.error("REJECT ERROR:", rejectError.message);
+
+          return NextResponse.json(
+            { error: "Unable to reject the account." },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({ message: "Account rejected." });
+      }
+
+      const approveRole = body.role;
+      const approveTeamId = readTeamId(body.teamId);
+
+      if (!isValidRole(approveRole)) {
+        return NextResponse.json(
+          { error: "Choose a valid role." },
+          { status: 400 }
+        );
+      }
+
+      if (approveRole === "field_worker") {
+        if (!approveTeamId) {
+          return NextResponse.json(
+            { error: "Select a team for field accounts." },
+            { status: 400 }
+          );
+        }
+
+        const { data: teamRow } = await adminSupabase
+          .from("teams")
+          .select("id")
+          .eq("id", approveTeamId)
+          .maybeSingle();
+
+        if (!teamRow) {
+          return NextResponse.json(
+            { error: "Selected team was not found." },
+            { status: 400 }
+          );
+        }
+      }
+
+      const { error: approveError } = await adminSupabase
+        .from("profiles")
+        .update({
+          status: "approved",
+          role: approveRole,
+          team_id: approveRole === "field_worker" ? approveTeamId : null,
+        })
+        .eq("id", targetId);
+
+      if (approveError) {
+        console.error("APPROVE ERROR:", approveError.message);
+
+        return NextResponse.json(
+          { error: "Unable to approve the account." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ message: "Account approved." });
+    }
+
+    // ---------- Update name, role and team ----------
     const id = typeof body.id === "string" ? body.id : "";
     const fullName =
       typeof body.fullName === "string" ? body.fullName.trim() : "";
     const role = body.role;
+    const teamId = readTeamId(body.teamId);
 
     if (!id || !fullName || !isValidRole(role)) {
       return NextResponse.json(
         { error: "User ID, full name, and valid role are required." },
+        { status: 400 }
+      );
+    }
+
+    if (role === "field_worker" && !teamId) {
+      return NextResponse.json(
+        { error: "Select a team for field accounts." },
         { status: 400 }
       );
     }
@@ -391,42 +520,6 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // The login identifier follows the name, so keep it in sync.
-    const newEmail = usernameToEmail(fullName);
-
-    if (!newEmail) {
-      return NextResponse.json(
-        { error: "Enter a valid name." },
-        { status: 400 }
-      );
-    }
-
-    const { data: others, error: othersError } = await adminSupabase
-      .from("profiles")
-      .select("id, full_name")
-      .neq("id", id);
-
-    if (othersError) {
-      return NextResponse.json(
-        { error: "Unable to check existing accounts." },
-        { status: 500 }
-      );
-    }
-
-    if (
-      (others ?? []).some(
-        (item) => usernameToEmail(item.full_name ?? "") === newEmail
-      )
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Another account already uses this name. Add a distinguishing detail, such as a middle initial.",
-        },
-        { status: 409 }
-      );
-    }
-
     const { data: currentAuth, error: currentAuthError } =
       await adminSupabase.auth.admin.getUserById(id);
 
@@ -439,20 +532,63 @@ export async function PATCH(request: Request) {
 
     const previousEmail = currentAuth.user.email ?? "";
 
-    if (previousEmail !== newEmail) {
-      const { error: emailError } =
-        await adminSupabase.auth.admin.updateUserById(id, {
-          email: newEmail,
-          email_confirm: true,
-        });
+    // Only accounts with a generated login (name@districtlens.local) follow
+    // the name. Accounts that signed up with a real email or Google keep it.
+    const usesGeneratedLogin = previousEmail.endsWith(
+      `@${USERNAME_EMAIL_DOMAIN}`
+    );
 
-      if (emailError) {
-        console.error("UPDATE AUTH EMAIL ERROR:", emailError.message);
+    const newEmail = usesGeneratedLogin ? usernameToEmail(fullName) : "";
 
+    if (usesGeneratedLogin) {
+      if (!newEmail) {
         return NextResponse.json(
-          { error: "Unable to update the login name." },
+          { error: "Enter a valid name." },
+          { status: 400 }
+        );
+      }
+
+      const { data: others, error: othersError } = await adminSupabase
+        .from("profiles")
+        .select("id, full_name")
+        .neq("id", id);
+
+      if (othersError) {
+        return NextResponse.json(
+          { error: "Unable to check existing accounts." },
           { status: 500 }
         );
+      }
+
+      if (
+        (others ?? []).some(
+          (item) => usernameToEmail(item.full_name ?? "") === newEmail
+        )
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Another account already uses this name. Add a distinguishing detail, such as a middle initial.",
+          },
+          { status: 409 }
+        );
+      }
+
+      if (previousEmail !== newEmail) {
+        const { error: emailError } =
+          await adminSupabase.auth.admin.updateUserById(id, {
+            email: newEmail,
+            email_confirm: true,
+          });
+
+        if (emailError) {
+          console.error("UPDATE AUTH EMAIL ERROR:", emailError.message);
+
+          return NextResponse.json(
+            { error: "Unable to update the login name." },
+            { status: 500 }
+          );
+        }
       }
     }
 
@@ -461,6 +597,7 @@ export async function PATCH(request: Request) {
       .update({
         full_name: fullName,
         role,
+        team_id: role === "field_worker" ? teamId : null,
       })
       .eq("id", id);
 
@@ -468,7 +605,7 @@ export async function PATCH(request: Request) {
       console.error("UPDATE PROFILE ERROR:", updateError.message);
 
       // Roll the login identifier back so name and login stay matched.
-      if (previousEmail && previousEmail !== newEmail) {
+      if (usesGeneratedLogin && previousEmail && previousEmail !== newEmail) {
         await adminSupabase.auth.admin.updateUserById(id, {
           email: previousEmail,
           email_confirm: true,

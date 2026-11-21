@@ -8,6 +8,8 @@ const VALID_ROLES = [
   "field_worker",
 ] as const;
 
+const NO_STORE = { "Cache-Control": "no-store" };
+
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -21,10 +23,7 @@ export async function GET() {
     if (authError || !user) {
       return NextResponse.json(
         { error: "Unauthorized." },
-        {
-          status: 401,
-          headers: { "Cache-Control": "no-store" },
-        }
+        { status: 401, headers: NO_STORE }
       );
     }
 
@@ -33,7 +32,7 @@ export async function GET() {
 
     const { data: profile, error } = await adminSupabase
       .from("profiles")
-      .select("role, must_change_password")
+      .select("role, must_change_password, status")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -42,58 +41,64 @@ export async function GET() {
 
       return NextResponse.json(
         { error: "Unable to load user profile." },
-        {
-          status: 500,
-          headers: { "Cache-Control": "no-store" },
-        }
+        { status: 500, headers: NO_STORE }
       );
     }
 
     if (!profile) {
       return NextResponse.json(
         { error: "User profile not found." },
-        {
-          status: 404,
-          headers: { "Cache-Control": "no-store" },
-        }
+        { status: 404, headers: NO_STORE }
       );
     }
 
-    // 3. Validate the user's role
+    // 3. The account must be approved by an administrator
+    if (profile.status === "pending") {
+      return NextResponse.json(
+        {
+          error: "Your account is waiting for administrator approval.",
+          status: "pending",
+        },
+        { status: 403, headers: NO_STORE }
+      );
+    }
+
+    if (profile.status === "rejected") {
+      return NextResponse.json(
+        {
+          error:
+            "Your account request was declined. Please contact the administrator.",
+          status: "rejected",
+        },
+        { status: 403, headers: NO_STORE }
+      );
+    }
+
+    // 4. Validate the user's role
     if (
-      !VALID_ROLES.includes(
-        profile.role as (typeof VALID_ROLES)[number]
-      )
+      !VALID_ROLES.includes(profile.role as (typeof VALID_ROLES)[number])
     ) {
       return NextResponse.json(
         { error: "Your account does not have a valid role." },
-        {
-          status: 403,
-          headers: { "Cache-Control": "no-store" },
-        }
+        { status: 403, headers: NO_STORE }
       );
     }
 
-    // 4. Return password status and role
+    // 5. Return password status and role
     return NextResponse.json(
       {
         role: profile.role,
-        mustChangePassword:
-          profile.must_change_password === true,
+        status: profile.status,
+        mustChangePassword: profile.must_change_password === true,
       },
-      {
-        headers: { "Cache-Control": "no-store" },
-      }
+      { headers: NO_STORE }
     );
   } catch (error) {
     console.error("PASSWORD STATUS ERROR:", error);
 
     return NextResponse.json(
       { error: "Something went wrong." },
-      {
-        status: 500,
-        headers: { "Cache-Control": "no-store" },
-      }
+      { status: 500, headers: NO_STORE }
     );
   }
 }

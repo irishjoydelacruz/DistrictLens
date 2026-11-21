@@ -16,6 +16,8 @@ import {
   Check,
   X,
   UserPlus,
+  UserCheck,
+  UserX,
   LoaderCircle,
   AlertCircle,
   CheckCircle2,
@@ -27,13 +29,20 @@ type UserRole =
   | "customer_service"
   | "field_worker";
 
+type UserStatus = "pending" | "approved" | "rejected";
+
 type ManagedUser = {
   id: string;
   fullName: string | null;
+  email: string | null;
   role: UserRole;
+  status: UserStatus;
+  teamId: string | null;
   mustChangePassword: boolean;
   resetRequested: boolean;
 };
+
+type TeamOption = { id: string; name: string };
 
 type CreatedUser = {
   id: string;
@@ -60,6 +69,19 @@ const roleColors: Record<UserRole, string> = {
   field_worker: "border-amber-200 bg-amber-50 text-amber-800",
 };
 
+const statusOptions = [
+  { value: "all", label: "All Statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+];
+
+const statusColors: Record<UserStatus, string> = {
+  pending: "border-amber-200 bg-amber-50 text-amber-800",
+  approved: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  rejected: "border-red-200 bg-red-50 text-red-700",
+};
+
 // UI-only class tokens (same look as the other admin pages).
 const inputBase =
   "w-full rounded-none border border-slate-300 bg-white text-sm text-slate-800 shadow-sm placeholder:text-slate-400 transition-colors focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20";
@@ -73,13 +95,21 @@ function isUserRole(value: unknown): value is UserRole {
   );
 }
 
+function isUserStatus(value: unknown): value is UserStatus {
+  return (
+    value === "pending" || value === "approved" || value === "rejected"
+  );
+}
+
 export default function UserManagement() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [teams, setTeams] = useState<TeamOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRole, setFilterRole] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [page, setPage] = useState(1);
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -89,6 +119,7 @@ export default function UserManagement() {
   const [fullName, setFullName] = useState("");
   const [role, setRole] =
     useState<UserRole>("customer_service");
+  const [teamId, setTeamId] = useState("");
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -107,6 +138,15 @@ export default function UserManagement() {
   const [resetPassword, setResetPassword] = useState("");
   const [resetting, setResetting] = useState(false);
   const [resetCopied, setResetCopied] = useState(false);
+
+  // Approve / reject dialog for pending (or rejected) accounts
+  const [approveTarget, setApproveTarget] =
+    useState<ManagedUser | null>(null);
+  const [approveRole, setApproveRole] =
+    useState<UserRole>("customer_service");
+  const [approveTeamId, setApproveTeamId] = useState("");
+  const [approving, setApproving] = useState(false);
+  const [approveError, setApproveError] = useState("");
 
   // Load users from the API.
   // `silent` = background refresh: no skeleton, no error banner, keeps the
@@ -128,7 +168,7 @@ export default function UserManagement() {
         response.redirected ||
         !response.headers.get("content-type")?.includes("application/json")
       ) {
-        window.location.href = "/admin/login";
+        window.location.href = "/login";
         return;
       }
 
@@ -152,13 +192,28 @@ export default function UserManagement() {
             typeof user.fullName === "string"
               ? user.fullName
               : null,
+          email:
+            typeof user.email === "string" ? user.email : null,
           role: user.role as UserRole,
+          status: isUserStatus(user.status)
+            ? user.status
+            : "approved",
+          teamId:
+            typeof user.teamId === "string" ? user.teamId : null,
           mustChangePassword:
             user.mustChangePassword === true,
           resetRequested: user.resetRequested === true,
         }));
 
       setUsers(loadedUsers);
+
+      setTeams(
+        (Array.isArray(data.teams) ? data.teams : []).filter(
+          (team: TeamOption) =>
+            typeof team?.id === "string" &&
+            typeof team?.name === "string"
+        )
+      );
     } catch (err) {
       if (silent) {
         console.error("Background refresh failed:", err);
@@ -178,18 +233,22 @@ export default function UserManagement() {
     void loadUsers();
   }, [loadUsers]);
 
-  // Auto refresh (paused while saving or resetting a password)
-  useAutoRefresh(() => void loadUsers(true), !saving && !resetting);
+  // Auto refresh (paused while saving, resetting or approving)
+  useAutoRefresh(
+    () => void loadUsers(true),
+    !saving && !resetting && !approving
+  );
 
-  // Go back to page 1 when the search or role filter changes
+  // Go back to page 1 when the search or filters change
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, filterRole]);
+  }, [searchTerm, filterRole, filterStatus]);
 
   // Reset and close forms
   function resetForm() {
     setFullName("");
     setRole("customer_service");
+    setTeamId("");
     setShowAddForm(false);
     setEditingUser(null);
   }
@@ -204,6 +263,7 @@ export default function UserManagement() {
     setEditingUser(null);
     setFullName("");
     setRole("customer_service");
+    setTeamId("");
     setShowAddForm(true);
   }
 
@@ -218,6 +278,7 @@ export default function UserManagement() {
 
     setFullName(user.fullName ?? "");
     setRole(user.role);
+    setTeamId(user.teamId ?? "");
   }
 
   // Create or update account
@@ -231,6 +292,11 @@ export default function UserManagement() {
 
     if (!fullName.trim()) {
       setError("Please enter the user's full name.");
+      return;
+    }
+
+    if (role === "field_worker" && !teamId) {
+      setError("Please select a team for this field account.");
       return;
     }
 
@@ -250,10 +316,12 @@ export default function UserManagement() {
                 id: editingUser!.id,
                 fullName: fullName.trim(),
                 role,
+                teamId: role === "field_worker" ? teamId : null,
               }
             : {
                 fullName: fullName.trim(),
                 role,
+                teamId: role === "field_worker" ? teamId : null,
               }
         ),
       });
@@ -409,17 +477,119 @@ export default function UserManagement() {
     }
   }
 
+  // Open the approve / reject dialog
+  function openApproveDialog(user: ManagedUser) {
+    setApproveError("");
+    setApproveTarget(user);
+    setApproveRole(user.role);
+    setApproveTeamId(user.teamId ?? "");
+  }
+
+  function closeApproveDialog() {
+    if (approving) return;
+    setApproveTarget(null);
+    setApproveError("");
+  }
+
+  async function performApprove() {
+    if (!approveTarget) return;
+
+    if (approveRole === "field_worker" && !approveTeamId) {
+      setApproveError("Please select a team for this field account.");
+      return;
+    }
+
+    setApproveError("");
+    setApproving(true);
+
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: approveTarget.id,
+          action: "approve",
+          role: approveRole,
+          teamId: approveRole === "field_worker" ? approveTeamId : null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to approve the account.");
+      }
+
+      setMessage(`${approveTarget.fullName || "Account"} was approved.`);
+      setApproveTarget(null);
+      await loadUsers(true);
+    } catch (err) {
+      setApproveError(
+        err instanceof Error ? err.message : "Something went wrong."
+      );
+    } finally {
+      setApproving(false);
+    }
+  }
+
+  async function performReject() {
+    if (!approveTarget) return;
+
+    setApproveError("");
+    setApproving(true);
+
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: approveTarget.id,
+          action: "reject",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to reject the account.");
+      }
+
+      setMessage(`${approveTarget.fullName || "Account"} was rejected.`);
+      setApproveTarget(null);
+      await loadUsers(true);
+    } catch (err) {
+      setApproveError(
+        err instanceof Error ? err.message : "Something went wrong."
+      );
+    } finally {
+      setApproving(false);
+    }
+  }
+
+  function teamName(id: string | null) {
+    return teams.find((team) => team.id === id)?.name ?? null;
+  }
+
+  const teamOptions = teams.map((team) => ({
+    value: team.id,
+    label: team.name,
+  }));
+
   // Filter accounts
   const filteredUsers = users.filter((user) => {
     const search = searchTerm.toLowerCase();
 
     const matchesSearch =
-      (user.fullName ?? "").toLowerCase().includes(search);
+      (user.fullName ?? "").toLowerCase().includes(search) ||
+      (user.email ?? "").toLowerCase().includes(search);
 
     const matchesRole =
       filterRole === "all" || user.role === filterRole;
 
-    return matchesSearch && matchesRole;
+    const matchesStatus =
+      filterStatus === "all" || user.status === filterStatus;
+
+    return matchesSearch && matchesRole && matchesStatus;
   });
 
   // Pagination (10 per page)
@@ -440,6 +610,10 @@ export default function UserManagement() {
 
   const totalFieldTeams = users.filter(
     (user) => user.role === "field_worker"
+  ).length;
+
+  const totalPending = users.filter(
+    (user) => user.status === "pending"
   ).length;
 
   return (
@@ -523,6 +697,24 @@ export default function UserManagement() {
             aria-label="Dismiss error message"
           >
             <X size={18} />
+          </button>
+        </div>
+      )}
+
+      {/* Pending approvals banner */}
+      {!loading && totalPending > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <p>
+            <span className="font-bold">{totalPending}</span> account
+            {totalPending === 1 ? "" : "s"} waiting for approval.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setFilterStatus("pending")}
+            className="border border-amber-400 bg-white px-3 py-1.5 font-semibold text-amber-900 hover:bg-amber-100"
+          >
+            Show pending
           </button>
         </div>
       )}
@@ -641,6 +833,22 @@ export default function UserManagement() {
                   options={roleOptions}
                 />
               </div>
+
+              {role === "field_worker" && (
+                <div>
+                  <label htmlFor="team" className={labelClass}>
+                    Team
+                  </label>
+
+                  <Dropdown
+                    id="team"
+                    value={teamId}
+                    onChange={setTeamId}
+                    options={teamOptions}
+                    placeholder="Select team"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="mt-8 flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-6">
@@ -759,13 +967,13 @@ export default function UserManagement() {
                 type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search by name"
+                placeholder="Search by name or email"
                 className={`${inputBase} py-2.5 pl-10 pr-3`}
               />
             </div>
           </div>
 
-          <div className="w-full lg:w-64">
+          <div className="w-full lg:w-56">
             <label htmlFor="role-filter" className={labelClass}>
               Role
             </label>
@@ -778,6 +986,19 @@ export default function UserManagement() {
                 { value: "all", label: "All Roles" },
                 ...roleOptions,
               ]}
+            />
+          </div>
+
+          <div className="w-full lg:w-56">
+            <label htmlFor="status-filter" className={labelClass}>
+              Status
+            </label>
+
+            <Dropdown
+              id="status-filter"
+              value={filterStatus}
+              onChange={setFilterStatus}
+              options={statusOptions}
             />
           </div>
         </div>
@@ -793,6 +1014,7 @@ export default function UserManagement() {
             onClick={() => {
               setSearchTerm("");
               setFilterRole("all");
+              setFilterStatus("all");
             }}
             className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
           >
@@ -810,7 +1032,7 @@ export default function UserManagement() {
                 <th className="px-6 py-3.5 font-semibold">User</th>
                 <th className="px-6 py-3.5 font-semibold">Role</th>
                 <th className="px-6 py-3.5 font-semibold">
-                  Password Status
+                  Account Status
                 </th>
                 <th className="px-6 py-3.5 text-right font-semibold">
                   Actions
@@ -882,6 +1104,12 @@ export default function UserManagement() {
                             {user.fullName || "Unnamed User"}
                           </p>
 
+                          {user.email && (
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {user.email}
+                            </p>
+                          )}
+
                           <p className="mt-0.5 font-mono text-xs text-slate-500">
                             ID: {user.id.slice(0, 8)}...
                           </p>
@@ -897,28 +1125,47 @@ export default function UserManagement() {
                       >
                         {roleLabels[user.role]}
                       </span>
+
+                      {user.role === "field_worker" &&
+                        teamName(user.teamId) && (
+                          <span className="ml-2 text-xs text-slate-500">
+                            {teamName(user.teamId)}
+                          </span>
+                        )}
                     </td>
 
                     <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 whitespace-nowrap border px-2 py-0.5 text-xs font-medium ${
-                          user.mustChangePassword
-                            ? "border-amber-200 bg-amber-50 text-amber-800"
-                            : "border-emerald-200 bg-emerald-50 text-emerald-800"
-                        }`}
-                      >
+                      {user.status !== "approved" ? (
                         <span
-                          className={`h-1.5 w-1.5 rounded-full ${
-                            user.mustChangePassword
-                              ? "bg-amber-500"
-                              : "bg-emerald-600"
+                          className={`inline-flex whitespace-nowrap border px-2 py-0.5 text-xs font-medium ${
+                            statusColors[user.status]
                           }`}
-                        />
+                        >
+                          {user.status === "pending"
+                            ? "Pending approval"
+                            : "Rejected"}
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1.5 whitespace-nowrap border px-2 py-0.5 text-xs font-medium ${
+                            user.mustChangePassword
+                              ? "border-amber-200 bg-amber-50 text-amber-800"
+                              : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              user.mustChangePassword
+                                ? "bg-amber-500"
+                                : "bg-emerald-600"
+                            }`}
+                          />
 
-                        {user.mustChangePassword
-                          ? "Change Required"
-                          : "Active"}
-                      </span>
+                          {user.mustChangePassword
+                            ? "Change Required"
+                            : "Active"}
+                        </span>
+                      )}
 
                       {user.resetRequested && (
                         <span className="mt-1.5 flex w-fit items-center gap-1.5 border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
@@ -930,6 +1177,20 @@ export default function UserManagement() {
 
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-2">
+                        {user.status !== "approved" && (
+                          <button
+                            type="button"
+                            onClick={() => openApproveDialog(user)}
+                            aria-label={`Review ${
+                              user.fullName || "this user"
+                            }`}
+                            title="Approve or reject"
+                            className="border border-emerald-300 bg-emerald-50 p-2 text-emerald-700 transition hover:bg-emerald-100"
+                          >
+                            <UserCheck size={16} />
+                          </button>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => openEditForm(user)}
@@ -1038,7 +1299,7 @@ export default function UserManagement() {
                     </h2>
 
                     <p className="mt-1 text-sm text-indigo-100">
-                      Update the user's name and role.
+                      Update the user&apos;s name, role and team.
                     </p>
                   </div>
                 </div>
@@ -1058,7 +1319,9 @@ export default function UserManagement() {
                 <div className="space-y-6">
                   <div>
                     <label htmlFor="edit-fullName" className={labelClass}>
-                      Username (Full Name)
+                      {editingUser.email
+                        ? "Full Name"
+                        : "Username (Full Name)"}
                     </label>
 
                     <input
@@ -1073,8 +1336,9 @@ export default function UserManagement() {
                     />
 
                     <p className="mt-1.5 text-xs text-slate-500">
-                      Changing the name also changes what the user types to
-                      sign in.
+                      {editingUser.email
+                        ? `This account signs in with ${editingUser.email}. Changing the name does not change the email.`
+                        : "Changing the name also changes what the user types to sign in."}
                     </p>
                   </div>
 
@@ -1090,6 +1354,22 @@ export default function UserManagement() {
                       options={roleOptions}
                     />
                   </div>
+
+                  {role === "field_worker" && (
+                    <div>
+                      <label htmlFor="edit-team" className={labelClass}>
+                        Team
+                      </label>
+
+                      <Dropdown
+                        id="edit-team"
+                        value={teamId}
+                        onChange={setTeamId}
+                        options={teamOptions}
+                        placeholder="Select team"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-8 flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-6">
@@ -1125,6 +1405,111 @@ export default function UserManagement() {
                 </div>
               </form>
             </section>
+          </div>,
+          document.body
+        )}
+
+      {/* Approve / Reject */}
+      {approveTarget &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-1100 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
+            role="presentation"
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="approve-user-title"
+              className="w-full max-w-md border border-[#DCD6FF] bg-white p-6 shadow-2xl sm:p-8"
+            >
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+                <UserCheck size={26} />
+              </div>
+
+              <h2
+                id="approve-user-title"
+                className="mt-5 text-center text-xl font-bold text-[#27205C]"
+              >
+                Review account request
+              </h2>
+
+              <p className="mt-2 text-center text-sm leading-6 text-slate-600">
+                <span className="font-semibold text-slate-900">
+                  {approveTarget.fullName || "This user"}
+                </span>
+                {approveTarget.email ? ` (${approveTarget.email})` : ""}
+              </p>
+
+              <div className="mt-6 space-y-5">
+                <div>
+                  <label htmlFor="approve-role" className={labelClass}>
+                    Assign role
+                  </label>
+
+                  <Dropdown
+                    id="approve-role"
+                    value={approveRole}
+                    onChange={(value) => setApproveRole(value as UserRole)}
+                    options={roleOptions}
+                  />
+                </div>
+
+                {approveRole === "field_worker" && (
+                  <div>
+                    <label htmlFor="approve-team" className={labelClass}>
+                      Assign team
+                    </label>
+
+                    <Dropdown
+                      id="approve-team"
+                      value={approveTeamId}
+                      onChange={setApproveTeamId}
+                      options={teamOptions}
+                      placeholder="Select team"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {approveError && (
+                <p
+                  role="alert"
+                  className="mt-4 border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+                >
+                  {approveError}
+                </p>
+              )}
+
+              <div className="mt-6 grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={closeApproveDialog}
+                  disabled={approving}
+                  className="border border-[#D9D4EE] px-3 py-3 text-sm font-semibold text-[#5145B5] transition hover:bg-indigo-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void performReject()}
+                  disabled={approving || approveTarget.status === "rejected"}
+                  className="inline-flex items-center justify-center gap-1.5 border border-red-300 px-3 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                >
+                  <UserX size={15} />
+                  Reject
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void performApprove()}
+                  disabled={approving}
+                  className="bg-linear-to-r from-[#342992] to-[#5366C8] px-3 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+                >
+                  {approving ? "Saving..." : "Approve"}
+                </button>
+              </div>
+            </div>
           </div>,
           document.body
         )}

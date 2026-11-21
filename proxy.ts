@@ -58,7 +58,7 @@ export async function proxy(request: NextRequest) {
   // 2. Load the profile. Fail closed if it cannot be verified.
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("role, must_change_password, team_id")
+    .select("role, must_change_password, team_id, status")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -67,12 +67,22 @@ export async function proxy(request: NextRequest) {
     return redirectTo("/login?error=profile");
   }
 
+  // 3. Only approved accounts may use the system.
+  if (profile.status !== "approved") {
+    await supabase.auth.signOut();
+    return redirectTo(
+      profile.status === "rejected"
+        ? "/login?error=rejected"
+        : "/login?error=pending"
+    );
+  }
+
   const isAdminRole =
     profile.role === "super_admin" || profile.role === "customer_service";
 
   const isWorkerRole = profile.role === "field_worker";
 
-  // 3. Reject unknown roles.
+  // 4. Reject unknown roles.
   if (!isAdminRole && !isWorkerRole) {
     await supabase.auth.signOut();
     return redirectTo("/login?error=role");
@@ -80,21 +90,21 @@ export async function proxy(request: NextRequest) {
 
   const home = isWorkerRole ? "/worker" : "/admin";
 
-  // 4. Temporary password: change it first.
+  // 5. Temporary password: change it first.
   if (profile.must_change_password === true && !isChangePasswordPage) {
     return redirectTo("/change-password");
   }
 
-  // 5. Already changed: don't show the change-password page again.
+  // 6. Already changed: don't show the change-password page again.
   if (isChangePasswordPage && profile.must_change_password !== true) {
     return redirectTo(home);
   }
 
-  // 6. Wrong workspace for this role: send them to their own.
+  // 7. Wrong workspace for this role: send them to their own.
   if (isAdminPage && !isAdminRole) return redirectTo(home);
   if (isWorkerPage && !isWorkerRole) return redirectTo(home);
 
-  // 7. Field accounts need a team assignment.
+  // 8. Field accounts need a team assignment.
   if (isWorkerRole && !profile.team_id && isWorkerPage) {
     await supabase.auth.signOut();
     return redirectTo("/login?error=team");

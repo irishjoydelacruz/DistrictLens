@@ -18,6 +18,10 @@ const QUERY_ERRORS: Record<string, string> = {
   profile: "Unable to verify your account. Please sign in again.",
   role: "Your account does not have a valid role.",
   team: "This field account has no assigned team. Contact your administrator.",
+  pending: "Your account is waiting for administrator approval.",
+  rejected:
+    "Your account request was declined. Please contact the administrator.",
+  callback: "Sign-in could not be completed. Please try again.",
 };
 
 function LoginForm() {
@@ -31,12 +35,33 @@ function LoginForm() {
   );
   const [loading, setLoading] = useState(false);
 
-  // "Forgot password" request (notifies the administrator)
+  const noticeParam = searchParams.get("notice");
+  const notice =
+    noticeParam === "reset"
+      ? "Password updated. You can now sign in."
+      : noticeParam === "verified"
+      ? "Email verified. Wait for the administrator to approve your account, then sign in."
+      : "";
+
+  // "Forgot password": email gets a reset link, username notifies the admin
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotName, setForgotName] = useState("");
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotMessage, setForgotMessage] = useState("");
   const [forgotError, setForgotError] = useState("");
+
+  async function handleGoogle() {
+    setError("");
+    const supabase = createClient();
+    const { error: googleError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+
+    if (googleError) {
+      setError("Unable to start Google sign-in. Please try again.");
+    }
+  }
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -44,10 +69,16 @@ function LoginForm() {
     setLoading(true);
 
     const supabase = createClient();
-    const email = usernameToEmail(username);
+
+    // An email is used as typed; anything else is a username (full name or
+    // team name) and is converted to its internal login.
+    const identifier = username.trim();
+    const email = identifier.includes("@")
+      ? identifier.toLowerCase()
+      : usernameToEmail(identifier);
 
     if (!email) {
-      setError("Please enter your username.");
+      setError("Please enter your email or username.");
       setLoading(false);
       return;
     }
@@ -60,11 +91,11 @@ function LoginForm() {
       });
 
       if (loginError) {
-        setError("Invalid username or password.");
+        setError("Invalid email/username or password.");
         return;
       }
 
-      // Step 2: Check account role and temporary password status
+      // Step 2: Check approval, role and temporary password status
       const response = await fetch("/api/auth/password-status", {
         cache: "no-store",
       });
@@ -114,10 +145,34 @@ function LoginForm() {
     setForgotBusy(true);
 
     try {
+      const value = forgotName.trim();
+
+      // Real email: Supabase sends the reset link.
+      if (value.includes("@")) {
+        const supabase = createClient();
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+          value.toLowerCase(),
+          {
+            redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+          }
+        );
+
+        if (resetError) {
+          setForgotError("Unable to send the reset email. Please try again.");
+          return;
+        }
+
+        setForgotMessage(
+          "If this email is registered, a reset link has been sent. Check your inbox and spam folder."
+        );
+        return;
+      }
+
+      // Username: notify the administrator (existing flow).
       const response = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: forgotName }),
+        body: JSON.stringify({ username: value }),
       });
       const result = await response.json();
 
@@ -196,13 +251,13 @@ function LoginForm() {
             </h2>
 
             <p className="mt-1 text-sm text-slate-600">
-              Enter your username and password
+              Enter your email or username and password
             </p>
 
             <form onSubmit={handleLogin} className="mt-8 space-y-6">
               <div>
                 <label htmlFor="username" className={labelClass}>
-                  Username
+                  Email or Username
                 </label>
 
                 <div className="relative">
@@ -229,7 +284,7 @@ function LoginForm() {
                     required
                     autoComplete="username"
                     className={`${inputClass} pl-11`}
-                    placeholder="Full name or team name"
+                    placeholder="Email, full name or team name"
                   />
                 </div>
               </div>
@@ -279,6 +334,15 @@ function LoginForm() {
                 </div>
               </div>
 
+              {notice && (
+                <p
+                  role="status"
+                  className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
+                >
+                  {notice}
+                </p>
+              )}
+
               {error && (
                 <p
                   role="alert"
@@ -293,7 +357,32 @@ function LoginForm() {
               </button>
             </form>
 
-            {/* FORGOT PASSWORD (notifies the admin) */}
+            {/* GOOGLE + REGISTER */}
+            <div className="my-5 flex items-center gap-3 text-xs text-slate-400">
+              <span className="h-px flex-1 bg-slate-200" />
+              or
+              <span className="h-px flex-1 bg-slate-200" />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogle}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Continue with Google
+            </button>
+
+            <p className="mt-4 text-center text-sm text-slate-600">
+              No account yet?{" "}
+              <Link
+                href="/register"
+                className="font-medium text-[#123D73] underline-offset-2 hover:underline"
+              >
+                Request an account
+              </Link>
+            </p>
+
+            {/* FORGOT PASSWORD */}
             <div className="mt-6 border-t border-slate-200 pt-5">
               {!forgotOpen ? (
                 <button
@@ -309,8 +398,9 @@ function LoginForm() {
               ) : (
                 <form onSubmit={handleForgot} className="space-y-3">
                   <p className="text-sm text-slate-600">
-                    Enter your username. The administrator will be notified
-                    and will give you a temporary password.
+                    Enter your email to receive a reset link. If your account
+                    has no email, enter your username and the administrator
+                    will give you a temporary password.
                   </p>
 
                   <input
@@ -318,8 +408,8 @@ function LoginForm() {
                     value={forgotName}
                     onChange={(e) => setForgotName(e.target.value)}
                     required
-                    aria-label="Username"
-                    placeholder="Full name or team name"
+                    aria-label="Email or username"
+                    placeholder="Email or username"
                     className={inputClass}
                   />
 
