@@ -6,14 +6,25 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  const tokenHash = searchParams.get("token_hash");
+  const type = searchParams.get("type");
   const next = searchParams.get("next");
 
-  if (!code) {
+  if (!code && !tokenHash) {
+    console.error("AUTH CALLBACK: missing code/token_hash");
     return NextResponse.redirect(`${origin}/login?error=callback`);
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+  // Reset links use token_hash (works in any browser/device).
+  // Google sign-in keeps using the PKCE code.
+  const { error } = tokenHash
+    ? await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: (type as "recovery") ?? "recovery",
+      })
+    : await supabase.auth.exchangeCodeForSession(code!);
 
   if (error) {
     console.error("AUTH CALLBACK ERROR:", error.message);
