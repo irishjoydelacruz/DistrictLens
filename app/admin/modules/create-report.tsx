@@ -674,7 +674,7 @@ function ReportCard({
 
   return (
     <article className={`border bg-white ${hasErrors ? "border-red-300" : "border-slate-300"}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
         <h4 className="text-base font-bold text-[#123D73]">
           Report {index + 1}
           {draft.csvRow ? (
@@ -716,7 +716,7 @@ function ReportCard({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-x-6 gap-y-5 p-5 sm:p-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-5 p-4 sm:p-6 md:grid-cols-2">
         {/* PUMPING STATION RELATED */}
         <div className="md:col-span-2">
           <label className={labelClass}>Is this a pumping station-related issue?</label>
@@ -1867,7 +1867,7 @@ export default function CreateReport({
         </div>
       )}
 
-      <div className="space-y-8 border border-[#4438A8] bg-white p-6 text-slate-900 sm:p-8">
+      <div className="space-y-8 border border-[#4438A8] bg-white p-4 text-slate-900 sm:p-8">
         {/* PROGRESS */}
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
@@ -2028,12 +2028,13 @@ export default function CreateReport({
             </div>
 
             <div className="flex items-start gap-3">
+              {/* Side arrows: tablet/desktop only */}
               <button
                 type="button"
                 aria-label="Previous report"
                 onClick={() => goToPage(safeIndex - 1)}
                 disabled={safeIndex === 0}
-                className="sticky top-[45vh] flex h-12 w-10 shrink-0 items-center justify-center border border-slate-300 bg-white text-2xl text-[#123D73] transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:w-12"
+                className="sticky top-[45vh] hidden h-12 w-12 shrink-0 items-center justify-center border border-slate-300 bg-white text-2xl text-[#123D73] transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex"
               >
                 ‹
               </button>
@@ -2060,6 +2061,31 @@ export default function CreateReport({
                     )
                   }
                 />
+
+                {/* Phone only: Previous / Next below the card (full width for the card) */}
+                <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:hidden">
+                  <button
+                    type="button"
+                    onClick={() => goToPage(safeIndex - 1)}
+                    disabled={safeIndex === 0}
+                    className={`${secondaryButtonClass} px-4 py-2.5`}
+                  >
+                    ← Previous
+                  </button>
+
+                  <span className="text-sm font-medium text-slate-600">
+                    {safeIndex + 1} / {drafts.length}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => goToPage(safeIndex + 1)}
+                    disabled={safeIndex === drafts.length - 1}
+                    className={`${secondaryButtonClass} px-4 py-2.5`}
+                  >
+                    Next →
+                  </button>
+                </div>
               </div>
 
               <button
@@ -2067,7 +2093,7 @@ export default function CreateReport({
                 aria-label="Next report"
                 onClick={() => goToPage(safeIndex + 1)}
                 disabled={safeIndex === drafts.length - 1}
-                className="sticky top-[45vh] flex h-12 w-10 shrink-0 items-center justify-center border border-slate-300 bg-white text-2xl text-[#123D73] transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:w-12"
+                className="sticky top-[45vh] hidden h-12 w-12 shrink-0 items-center justify-center border border-slate-300 bg-white text-2xl text-[#123D73] transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex"
               >
                 ›
               </button>

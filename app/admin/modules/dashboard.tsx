@@ -330,7 +330,7 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
 
       {/* WELCOME BANNER */}
       <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-6 sm:px-8">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
           {/* Left: Welcome Text */}
           <div className="min-w-0">
             <p className="text-sm font-bold text-indigo-100">
@@ -358,10 +358,12 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
             </div>
           </div>
 
-          {/* Right: Official Logos */}
-          <div className="flex shrink-0 items-center justify-center gap-5 sm:ml-auto sm:mr-8 lg:mr-16">
+          {/* Right: Official Logos
+              Phone: small, side by side, right under "Tanza, Cavite | date".
+              sm and up: bigger, on the right side of the banner. */}
+          <div className="flex shrink-0 items-center justify-start gap-3 sm:ml-auto sm:mr-8 sm:justify-center sm:gap-5 lg:mr-16">
             {/* Municipality of Tanza Logo */}
-            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-white p-2 shadow-md sm:h-24 sm:w-24 lg:h-28 lg:w-28">
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white p-1.5 shadow-md sm:h-24 sm:w-24 sm:p-2 lg:h-28 lg:w-28">
               <img
                 src="/images/tanza-logo.jpe"
                 alt="Municipality of Tanza logo"
@@ -370,7 +372,7 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
             </div>
 
             {/* Tanza Water District Logo */}
-            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-white p-2 shadow-md sm:h-24 sm:w-24 lg:h-28 lg:w-28">
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white p-1.5 shadow-md sm:h-24 sm:w-24 sm:p-2 lg:h-28 lg:w-28">
               <img
                 src="/images/twd-logo.jpg"
                 alt="Tanza Water District logo"

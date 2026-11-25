@@ -7,21 +7,17 @@ import {
   ShieldCheck,
   Headset,
   HardHat,
-  Plus,
   Search,
   RefreshCw,
   Pencil,
   Trash2,
-  Copy,
   Check,
   X,
-  UserPlus,
   UserCheck,
   UserX,
   LoaderCircle,
   AlertCircle,
   CheckCircle2,
-  KeyRound,
 } from "lucide-react";
 
 type UserRole =
@@ -35,22 +31,13 @@ type ManagedUser = {
   id: string;
   fullName: string | null;
   email: string | null;
-  role: UserRole;
+  role: UserRole | null;
   status: UserStatus;
   teamId: string | null;
   mustChangePassword: boolean;
-  resetRequested: boolean;
 };
 
 type TeamOption = { id: string; name: string };
-
-type CreatedUser = {
-  id: string;
-  fullName: string;
-  email: string;
-  role: UserRole;
-  temporaryPassword: string;
-};
 
 const roleOptions: { value: UserRole; label: string }[] = [
   { value: "super_admin", label: "Admin" },
@@ -102,7 +89,14 @@ function isUserStatus(value: unknown): value is UserStatus {
   );
 }
 
-export default function UserManagement() {
+export default function UserManagement({
+  onPendingChange,
+}: {
+  // Lets the navigation badge stay in sync with this page.
+  // The parent must pass a stable function (a useState setter or a
+  // useCallback), otherwise the list reloads on every render.
+  onPendingChange?: (count: number) => void;
+}) {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [teams, setTeams] = useState<TeamOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,7 +107,6 @@ export default function UserManagement() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [page, setPage] = useState(1);
 
-  const [showAddForm, setShowAddForm] = useState(false);
   const [editingUser, setEditingUser] =
     useState<ManagedUser | null>(null);
 
@@ -125,27 +118,15 @@ export default function UserManagement() {
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [createdUser, setCreatedUser] =
-    useState<CreatedUser | null>(null);
-
-  const [copied, setCopied] = useState(false);
 
   // Account waiting for delete confirmation (styled dialog)
   const [deleteTarget, setDeleteTarget] =
     useState<ManagedUser | null>(null);
 
-  // Password reset dialog (confirm first, then show the new password)
-  const [resetTarget, setResetTarget] =
-    useState<ManagedUser | null>(null);
-  const [resetPassword, setResetPassword] = useState("");
-  const [resetting, setResetting] = useState(false);
-  const [resetCopied, setResetCopied] = useState(false);
-
   // Approve / reject dialog for pending (or rejected) accounts
   const [approveTarget, setApproveTarget] =
     useState<ManagedUser | null>(null);
-  const [approveRole, setApproveRole] =
-    useState<UserRole>("customer_service");
+  const [approveRole, setApproveRole] = useState<UserRole | "">("");
   const [approveTeamId, setApproveTeamId] = useState("");
   const [approving, setApproving] = useState(false);
   const [approveError, setApproveError] = useState("");
@@ -153,144 +134,133 @@ export default function UserManagement() {
   // Load users from the API.
   // `silent` = background refresh: no skeleton, no error banner, keeps the
   // current list if the request fails.
-  const loadUsers = useCallback(async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-      setError("");
-    }
-
-    try {
-      const response = await fetch("/api/admin/users", {
-        method: "GET",
-        cache: "no-store",
-      });
-
-      // A signed-out session is redirected to the login page (HTML, not JSON).
-      if (
-        response.redirected ||
-        !response.headers.get("content-type")?.includes("application/json")
-      ) {
-        window.location.href = "/login";
-        return;
+  const loadUsers = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setLoading(true);
+        setError("");
       }
 
-      const data = await response.json();
+      try {
+        const response = await fetch("/api/admin/users", {
+          method: "GET",
+          cache: "no-store",
+        });
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to load users.");
-      }
+        // A signed-out session is redirected to the login page (HTML, not JSON).
+        if (
+          response.redirected ||
+          !response.headers
+            .get("content-type")
+            ?.includes("application/json")
+        ) {
+          window.location.href = "/login";
+          return;
+        }
 
-      const loadedUsers: ManagedUser[] = (
-        Array.isArray(data.users) ? data.users : []
-      )
-        .filter(
-          (user: Record<string, unknown>) =>
-            typeof user.id === "string" &&
-            isUserRole(user.role)
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load users.");
+        }
+
+        const loadedUsers: ManagedUser[] = (
+          Array.isArray(data.users) ? data.users : []
         )
-        .map((user: Record<string, unknown>) => ({
-          id: user.id as string,
-          fullName:
-            typeof user.fullName === "string"
-              ? user.fullName
-              : null,
-          email:
-            typeof user.email === "string" ? user.email : null,
-          role: user.role as UserRole,
-          status: isUserStatus(user.status)
-            ? user.status
-            : "approved",
-          teamId:
-            typeof user.teamId === "string" ? user.teamId : null,
-          mustChangePassword:
-            user.mustChangePassword === true,
-          resetRequested: user.resetRequested === true,
-        }));
+          .filter(
+            (user: Record<string, unknown>) => typeof user.id === "string"
+          )
+          .map((user: Record<string, unknown>) => ({
+            id: user.id as string,
+            fullName:
+              typeof user.fullName === "string" ? user.fullName : null,
+            email: typeof user.email === "string" ? user.email : null,
+            role: isUserRole(user.role) ? user.role : null,
+            status: isUserStatus(user.status) ? user.status : "approved",
+            teamId:
+              typeof user.teamId === "string" ? user.teamId : null,
+            mustChangePassword: user.mustChangePassword === true,
+          }));
 
-      setUsers(loadedUsers);
+        setUsers(loadedUsers);
 
-      setTeams(
-        (Array.isArray(data.teams) ? data.teams : []).filter(
-          (team: TeamOption) =>
-            typeof team?.id === "string" &&
-            typeof team?.name === "string"
-        )
-      );
-    } catch (err) {
-      if (silent) {
-        console.error("Background refresh failed:", err);
-      } else {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Something went wrong while loading users."
+        // Keep the navigation badge in sync.
+        const pendingCount = loadedUsers.filter(
+          (user) => user.status === "pending"
+        ).length;
+
+        onPendingChange?.(pendingCount);
+        window.dispatchEvent(
+          new CustomEvent("districtlens:pending-users", {
+            detail: pendingCount,
+          })
         );
+
+        setTeams(
+          (Array.isArray(data.teams) ? data.teams : []).filter(
+            (team: TeamOption) =>
+              typeof team?.id === "string" &&
+              typeof team?.name === "string"
+          )
+        );
+      } catch (err) {
+        if (silent) {
+          console.error("Background refresh failed:", err);
+        } else {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Something went wrong while loading users."
+          );
+        }
+      } finally {
+        if (!silent) setLoading(false);
       }
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, []);
+    },
+    [onPendingChange]
+  );
 
   useEffect(() => {
     void loadUsers();
   }, [loadUsers]);
 
-  // Auto refresh (paused while saving, resetting or approving)
-  useAutoRefresh(
-    () => void loadUsers(true),
-    !saving && !resetting && !approving
-  );
+  // Auto refresh (paused while saving or approving)
+  useAutoRefresh(() => void loadUsers(true), !saving && !approving);
 
   // Go back to page 1 when the search or filters change
   useEffect(() => {
     setPage(1);
   }, [searchTerm, filterRole, filterStatus]);
 
-  // Reset and close forms
+  // Reset and close the edit modal
   function resetForm() {
     setFullName("");
     setEmail("");
     setRole("customer_service");
     setTeamId("");
-    setShowAddForm(false);
     setEditingUser(null);
-  }
-
-  // Open Add User form
-  function openAddForm() {
-    setError("");
-    setMessage("");
-    setCreatedUser(null);
-    setCopied(false);
-
-    setEditingUser(null);
-    setFullName("");
-    setEmail("");
-    setRole("customer_service");
-    setTeamId("");
-    setShowAddForm(true);
   }
 
   // Open Edit modal
   function openEditForm(user: ManagedUser) {
     setError("");
     setMessage("");
-    setCreatedUser(null);
 
-    setShowAddForm(false);
     setEditingUser(user);
 
     setFullName(user.fullName ?? "");
     setEmail(user.email ?? "");
-    setRole(user.role);
+    setRole(user.role ?? "customer_service");
     setTeamId(user.teamId ?? "");
   }
 
-  // Create or update account
+  // Update account
   async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
+
+    if (!editingUser) return;
 
     setError("");
     setMessage("");
@@ -313,72 +283,32 @@ export default function UserManagement() {
     setSaving(true);
 
     try {
-      const isEditing = Boolean(editingUser);
-
       const response = await fetch("/api/admin/users", {
-        method: isEditing ? "PATCH" : "POST",
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(
-          isEditing
-            ? {
-                id: editingUser!.id,
-                fullName: fullName.trim(),
-                email: email.trim(),
-                role,
-                teamId: role === "field_worker" ? teamId : null,
-              }
-            : {
-                fullName: fullName.trim(),
-                email: email.trim(),
-                role,
-                teamId: role === "field_worker" ? teamId : null,
-              }
-        ),
+        body: JSON.stringify({
+          id: editingUser.id,
+          fullName: fullName.trim(),
+          email: email.trim(),
+          role,
+          teamId: role === "field_worker" ? teamId : null,
+        }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          data.error ||
-            (isEditing
-              ? "Failed to update user."
-              : "Failed to create user.")
-        );
+        throw new Error(data.error || "Failed to update user.");
       }
 
-      if (isEditing) {
-        setMessage("User account updated successfully.");
-        resetForm();
-        await loadUsers(true);
-      } else {
-        const newUser = data.user;
-
-        if (newUser && data.temporaryPassword) {
-          setCreatedUser({
-            id: newUser.id,
-            fullName:
-              newUser.fullName ?? fullName.trim(),
-            email: newUser.email ?? email.trim().toLowerCase(),
-            role: newUser.role ?? role,
-            temporaryPassword: data.temporaryPassword,
-          });
-        } else {
-          setMessage(
-            "Account created successfully, but the temporary password was not returned."
-          );
-        }
-
-        resetForm();
-        await loadUsers(true);
-      }
+      setMessage("User account updated successfully.");
+      resetForm();
+      await loadUsers(true);
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong."
+        err instanceof Error ? err.message : "Something went wrong."
       );
     } finally {
       setSaving(false);
@@ -421,81 +351,12 @@ export default function UserManagement() {
     }
   }
 
-  function closeResetDialog() {
-    setResetTarget(null);
-    setResetPassword("");
-    setResetCopied(false);
-  }
-
-  // Reset a user's password (runs only after the admin confirms)
-  async function performReset(user: ManagedUser) {
-    setError("");
-    setMessage("");
-    setResetting(true);
-
-    try {
-      const response = await fetch("/api/admin/users", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id: user.id, action: "reset-password" }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.temporaryPassword) {
-        throw new Error(data.error || "Failed to reset password.");
-      }
-
-      setResetPassword(data.temporaryPassword);
-      await loadUsers(true);
-    } catch (err) {
-      closeResetDialog();
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong while resetting the password."
-      );
-    } finally {
-      setResetting(false);
-    }
-  }
-
-  async function copyResetPassword() {
-    try {
-      await navigator.clipboard.writeText(resetPassword);
-      setResetCopied(true);
-      window.setTimeout(() => setResetCopied(false), 2000);
-    } catch {
-      setError("Unable to copy the password. Please copy it manually.");
-    }
-  }
-
-  // Copy temporary password
-  async function copyTemporaryPassword() {
-    if (!createdUser?.temporaryPassword) return;
-
-    try {
-      await navigator.clipboard.writeText(
-        createdUser.temporaryPassword
-      );
-
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setError(
-        "Unable to copy the password. Please copy it manually."
-      );
-    }
-  }
-
   // Open the approve / reject dialog
   function openApproveDialog(user: ManagedUser) {
     setApproveError("");
     setApproveTarget(user);
-    setApproveRole(user.role);
-    setApproveTeamId(user.teamId ?? "");
+    setApproveRole(""); // the admin chooses the role
+    setApproveTeamId("");
   }
 
   function closeApproveDialog() {
@@ -506,6 +367,11 @@ export default function UserManagement() {
 
   async function performApprove() {
     if (!approveTarget) return;
+
+    if (!approveRole) {
+      setApproveError("Please select a role for this account.");
+      return;
+    }
 
     if (approveRole === "field_worker" && !approveTeamId) {
       setApproveError("Please select a team for this field account.");
@@ -588,22 +454,28 @@ export default function UserManagement() {
     label: team.name,
   }));
 
-  // Filter accounts
-  const filteredUsers = users.filter((user) => {
-    const search = searchTerm.toLowerCase();
+  // Filter accounts, with pending accounts always at the top
+  const filteredUsers = users
+    .filter((user) => {
+      const search = searchTerm.toLowerCase();
 
-    const matchesSearch =
-      (user.fullName ?? "").toLowerCase().includes(search) ||
-      (user.email ?? "").toLowerCase().includes(search);
+      const matchesSearch =
+        (user.fullName ?? "").toLowerCase().includes(search) ||
+        (user.email ?? "").toLowerCase().includes(search);
 
-    const matchesRole =
-      filterRole === "all" || user.role === filterRole;
+      const matchesRole =
+        filterRole === "all" ||
+        (user.status === "approved" && user.role === filterRole);
 
-    const matchesStatus =
-      filterStatus === "all" || user.status === filterStatus;
+      const matchesStatus =
+        filterStatus === "all" || user.status === filterStatus;
 
-    return matchesSearch && matchesRole && matchesStatus;
-  });
+      return matchesSearch && matchesRole && matchesStatus;
+    })
+    .sort(
+      (a, b) =>
+        Number(b.status === "pending") - Number(a.status === "pending")
+    );
 
   // Pagination (10 per page)
   const {
@@ -613,21 +485,28 @@ export default function UserManagement() {
   } = paginate(filteredUsers, page);
 
   // Summary counts
-  const totalAdmins = users.filter(
+  const approvedUsers = users.filter((user) => user.status === "approved");
+
+  const totalAdmins = approvedUsers.filter(
     (user) => user.role === "super_admin"
   ).length;
 
-  const totalCustomerService = users.filter(
+  const totalCustomerService = approvedUsers.filter(
     (user) => user.role === "customer_service"
   ).length;
 
-  const totalFieldTeams = users.filter(
+  const totalFieldTeams = approvedUsers.filter(
     (user) => user.role === "field_worker"
   ).length;
 
   const totalPending = users.filter(
     (user) => user.status === "pending"
   ).length;
+
+  // Approve needs a role, and a team when the role is Field Team
+  const approveMissingRole = approveRole === "";
+  const approveMissingTeam =
+    approveRole === "field_worker" && !approveTeamId;
 
   return (
     <div className="space-y-8 border border-[#4438A8] bg-white p-6 text-slate-900 sm:p-8">
@@ -644,7 +523,7 @@ export default function UserManagement() {
             </h2>
 
             <p className="mt-2 text-base text-indigo-100">
-              Manage system accounts and their assigned roles.
+              Approve new accounts and manage their assigned roles.
             </p>
           </div>
 
@@ -660,15 +539,6 @@ export default function UserManagement() {
                 className={loading ? "animate-spin" : ""}
               />
               Refresh
-            </button>
-
-            <button
-              type="button"
-              onClick={openAddForm}
-              className="inline-flex items-center justify-center gap-2 border border-white bg-white px-4 py-2.5 text-sm font-semibold text-[#241C70] transition hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-white/60"
-            >
-              <Plus size={18} />
-              Add User
             </button>
           </div>
         </div>
@@ -781,206 +651,6 @@ export default function UserManagement() {
           </>
         )}
       </div>
-
-      {/* Add User Form */}
-      {showAddForm && (
-        <section className="border border-[#4438A8] bg-white">
-          <div className="flex items-center justify-between gap-4 border-b border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-5 sm:px-8">
-            <div className="flex items-center gap-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-white/30 bg-white/10 text-white">
-                <UserPlus size={21} />
-              </div>
-
-              <div>
-                <h2 className="text-lg font-bold text-white">
-                  Create New Account
-                </h2>
-                <p className="mt-1 text-sm text-indigo-100">
-                  Add a new user to DistrictLens.
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={resetForm}
-              disabled={saving}
-              className="p-2 text-indigo-100 transition hover:bg-white/10 hover:text-white"
-              aria-label="Close add user form"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="p-6 sm:p-8">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
-                <label htmlFor="fullName" className={labelClass}>
-                  Full Name
-                </label>
-
-                <input
-                  id="fullName"
-                  type="text"
-                  value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
-                  placeholder="e.g. Juan Dela Cruz"
-                  required
-                  className={`${inputBase} px-3 py-2.5`}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="newEmail" className={labelClass}>
-                  Email Address
-                </label>
-
-                <input
-                  id="newEmail"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="e.g. juan@example.com"
-                  required
-                  autoComplete="off"
-                  className={`${inputBase} px-3 py-2.5`}
-                />
-
-                <p className="mt-1.5 text-xs text-slate-500">
-                  The user signs in with this email and the temporary password.
-                </p>
-              </div>
-
-              <div>
-                <label htmlFor="role" className={labelClass}>
-                  Account Role
-                </label>
-
-                <Dropdown
-                  id="role"
-                  value={role}
-                  onChange={(value) => setRole(value as UserRole)}
-                  options={roleOptions}
-                />
-              </div>
-
-              {role === "field_worker" && (
-                <div>
-                  <label htmlFor="team" className={labelClass}>
-                    Team
-                  </label>
-
-                  <Dropdown
-                    id="team"
-                    value={teamId}
-                    onChange={setTeamId}
-                    options={teamOptions}
-                    placeholder="Select team"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="mt-8 flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-6">
-              <button
-                type="button"
-                onClick={resetForm}
-                disabled={saving}
-                className="border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex items-center justify-center gap-2 bg-[#123D73] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#0D2F59] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? (
-                  <>
-                    <LoaderCircle size={17} className="animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <UserPlus size={17} />
-                    Create Account
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
-      {/* Temporary Password Notice */}
-      {createdUser && (
-        <section className="border border-amber-300 bg-amber-50 p-6 sm:p-8">
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-amber-200 bg-amber-100 text-amber-800">
-              <KeyRound size={22} />
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-bold text-amber-900">
-                Account Created Successfully
-              </h2>
-
-              <p className="mt-1 text-sm text-amber-800">
-                A temporary password was generated for this account. Share
-                it securely with the intended user.
-              </p>
-
-              <div className="mt-5 border border-amber-200 bg-white p-5">
-                <p className="text-sm font-semibold text-slate-800">
-                  {createdUser.fullName}
-                </p>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Sign in with the email{" "}
-                  <span className="font-semibold text-slate-700">
-                    {createdUser.email}
-                  </span>
-                  .
-                </p>
-
-                <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">
-                  Temporary Password
-                </p>
-
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <code className="break-all border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
-                    {createdUser.temporaryPassword}
-                  </code>
-
-                  <button
-                    type="button"
-                    onClick={copyTemporaryPassword}
-                    className="inline-flex items-center gap-2 border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                  >
-                    {copied ? <Check size={16} /> : <Copy size={16} />}
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-
-                <p className="mt-4 text-xs text-slate-500">
-                  Keep this password private. The user should change it
-                  after signing in if your login flow supports forced
-                  password changes.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setCreatedUser(null)}
-                className="mt-4 text-sm font-semibold text-amber-900 underline underline-offset-4"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* Search + Filter */}
       <section className="border border-slate-300 bg-white p-6">
@@ -1100,7 +770,6 @@ export default function UserManagement() {
                       <div className="flex justify-end gap-2">
                         <Skeleton className="h-9 w-9" />
                         <Skeleton className="h-9 w-9" />
-                        <Skeleton className="h-9 w-9" />
                       </div>
                     </td>
                   </tr>
@@ -1124,7 +793,12 @@ export default function UserManagement() {
                 </tr>
               ) : (
                 pagedUsers.map((user) => (
-                  <tr key={user.id} className="transition hover:bg-slate-50">
+                  <tr
+                    key={user.id}
+                    className={`transition hover:bg-slate-50 ${
+                      user.status === "pending" ? "bg-amber-50/60" : ""
+                    }`}
+                  >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-slate-100 font-bold text-[#123D73]">
@@ -1156,20 +830,28 @@ export default function UserManagement() {
                     </td>
 
                     <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex whitespace-nowrap border px-2 py-0.5 text-xs font-medium ${
-                          roleColors[user.role]
-                        }`}
-                      >
-                        {roleLabels[user.role]}
-                      </span>
-
-                      {user.role === "field_worker" &&
-                        teamName(user.teamId) && (
-                          <span className="ml-2 text-xs text-slate-500">
-                            {teamName(user.teamId)}
+                      {user.status === "approved" && user.role ? (
+                        <>
+                          <span
+                            className={`inline-flex whitespace-nowrap border px-2 py-0.5 text-xs font-medium ${
+                              roleColors[user.role]
+                            }`}
+                          >
+                            {roleLabels[user.role]}
                           </span>
-                        )}
+
+                          {user.role === "field_worker" &&
+                            teamName(user.teamId) && (
+                              <span className="ml-2 text-xs text-slate-500">
+                                {teamName(user.teamId)}
+                              </span>
+                            )}
+                        </>
+                      ) : (
+                        <span className="inline-flex whitespace-nowrap border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          No role assigned
+                        </span>
+                      )}
                     </td>
 
                     <td className="px-6 py-4">
@@ -1204,13 +886,6 @@ export default function UserManagement() {
                             : "Active"}
                         </span>
                       )}
-
-                      {user.resetRequested && (
-                        <span className="mt-1.5 flex w-fit items-center gap-1.5 border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
-                          <KeyRound size={12} />
-                          Reset requested
-                        </span>
-                      )}
                     </td>
 
                     <td className="px-6 py-4">
@@ -1229,33 +904,19 @@ export default function UserManagement() {
                           </button>
                         )}
 
-                        <button
-                          type="button"
-                          onClick={() => openEditForm(user)}
-                          aria-label={`Edit ${
-                            user.fullName || "this user"
-                          }`}
-                          title="Edit user"
-                          className="border border-slate-300 bg-white p-2 text-slate-600 transition hover:border-[#123D73] hover:bg-blue-50 hover:text-[#123D73]"
-                        >
-                          <Pencil size={16} />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setResetPassword("");
-                            setResetCopied(false);
-                            setResetTarget(user);
-                          }}
-                          aria-label={`Reset password for ${
-                            user.fullName || "this user"
-                          }`}
-                          title="Reset password"
-                          className="border border-slate-300 bg-white p-2 text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
-                        >
-                          <KeyRound size={16} />
-                        </button>
+                        {user.status === "approved" && (
+                          <button
+                            type="button"
+                            onClick={() => openEditForm(user)}
+                            aria-label={`Edit ${
+                              user.fullName || "this user"
+                            }`}
+                            title="Edit user"
+                            className="border border-slate-300 bg-white p-2 text-slate-600 transition hover:border-[#123D73] hover:bg-blue-50 hover:text-[#123D73]"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        )}
 
                         <button
                           type="button"
@@ -1286,23 +947,6 @@ export default function UserManagement() {
           />
         )}
 
-        <div className="flex flex-col gap-2 border-t border-slate-300 bg-slate-50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-600">
-            Showing{" "}
-            <span className="font-semibold text-slate-900">
-              {pagedUsers.length}
-            </span>{" "}
-            of{" "}
-            <span className="font-semibold text-slate-900">
-              {users.length}
-            </span>{" "}
-            accounts
-          </p>
-
-          <p className="text-xs text-slate-500">
-            DistrictLens Account Administration
-          </p>
-        </div>
       </section>
 
       {/* Edit User Modal */}
@@ -1503,6 +1147,7 @@ export default function UserManagement() {
                     value={approveRole}
                     onChange={(value) => setApproveRole(value as UserRole)}
                     options={roleOptions}
+                    placeholder="Select role"
                   />
                 </div>
 
@@ -1522,6 +1167,36 @@ export default function UserManagement() {
                   </div>
                 )}
               </div>
+
+              {/* Summary of what will be saved */}
+              <p className="mt-5 border border-slate-200 bg-slate-50 p-3 text-center text-sm text-slate-600">
+                {approveRole === "" ? (
+                  <span className="font-medium text-amber-700">
+                    Select a role to continue.
+                  </span>
+                ) : (
+                  <>
+                    Approve as{" "}
+                    <span className="font-semibold text-slate-900">
+                      {roleLabels[approveRole]}
+                    </span>
+                    {approveRole === "field_worker" &&
+                      teamName(approveTeamId) && (
+                        <>
+                          {" "}in{" "}
+                          <span className="font-semibold text-slate-900">
+                            {teamName(approveTeamId)}
+                          </span>
+                        </>
+                      )}
+                    {approveMissingTeam && (
+                      <span className="mt-1 block font-medium text-amber-700">
+                        Select a team to continue.
+                      </span>
+                    )}
+                  </>
+                )}
+              </p>
 
               {approveError && (
                 <p
@@ -1555,113 +1230,12 @@ export default function UserManagement() {
                 <button
                   type="button"
                   onClick={() => void performApprove()}
-                  disabled={approving}
-                  className="bg-linear-to-r from-[#342992] to-[#5366C8] px-3 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+                  disabled={approving || approveMissingRole || approveMissingTeam}
+                  className="bg-linear-to-r from-[#342992] to-[#5366C8] px-3 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {approving ? "Saving..." : "Approve"}
                 </button>
               </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-      {/* Reset Password */}
-      {resetTarget &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-1100 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
-            role="presentation"
-          >
-            <div
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby="reset-user-title"
-              className="w-full max-w-md border border-[#DCD6FF] bg-white p-6 shadow-2xl sm:p-8"
-            >
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
-                <KeyRound size={26} />
-              </div>
-
-              {resetPassword ? (
-                <>
-                  <h2
-                    id="reset-user-title"
-                    className="mt-5 text-center text-xl font-bold text-[#27205C]"
-                  >
-                    Password reset
-                  </h2>
-
-                  <p className="mt-2 text-center text-sm leading-6 text-slate-600">
-                    Give this temporary password to{" "}
-                    <span className="font-semibold text-slate-900">
-                      {resetTarget.fullName || "the user"}
-                    </span>
-                    . They will be asked to set a new password when they sign
-                    in. It will not be shown again.
-                  </p>
-
-                  <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-                    <code className="break-all border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
-                      {resetPassword}
-                    </code>
-
-                    <button
-                      type="button"
-                      onClick={copyResetPassword}
-                      className="inline-flex items-center gap-2 border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                    >
-                      {resetCopied ? <Check size={16} /> : <Copy size={16} />}
-                      {resetCopied ? "Copied" : "Copy"}
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={closeResetDialog}
-                    className="mt-6 w-full bg-linear-to-r from-[#342992] to-[#5366C8] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
-                  >
-                    Done
-                  </button>
-                </>
-              ) : (
-                <>
-                  <h2
-                    id="reset-user-title"
-                    className="mt-5 text-center text-xl font-bold text-[#27205C]"
-                  >
-                    Reset this password?
-                  </h2>
-
-                  <p className="mt-2 text-center text-sm leading-6 text-slate-600">
-                    A new temporary password will be generated for{" "}
-                    <span className="font-semibold text-slate-900">
-                      {resetTarget.fullName || "this user"}
-                    </span>
-                    . Their current password will stop working.
-                  </p>
-
-                  <div className="mt-6 grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={closeResetDialog}
-                      disabled={resetting}
-                      className="border border-[#D9D4EE] px-4 py-3 text-sm font-semibold text-[#5145B5] transition hover:bg-indigo-50 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={resetting}
-                      onClick={() => void performReset(resetTarget)}
-                      className="bg-linear-to-r from-[#342992] to-[#5366C8] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
-                    >
-                      {resetting ? "Resetting..." : "Yes, reset"}
-                    </button>
-                  </div>
-                </>
-              )}
             </div>
           </div>,
           document.body

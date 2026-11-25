@@ -446,8 +446,10 @@ export default function CustomerReports({
 
         {/* TABS + REFRESH */}
         <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Phone: the 3 tabs share one line (equal width).
+              sm and up: normal size, width follows the content. */}
           <div
-            className="flex flex-wrap items-center gap-2"
+            className="flex w-full items-center gap-1.5 sm:w-auto sm:gap-2"
             role="tablist"
             aria-label="Customer report status"
           >
@@ -464,7 +466,7 @@ export default function CustomerReports({
                     setTab(item.key);
                     setOpenId(null);
                   }}
-                  className={`flex items-center gap-2 border px-5 py-2.5 text-sm font-semibold transition-colors ${
+                  className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap border px-2 py-2.5 text-sm font-semibold transition-colors sm:flex-none sm:gap-2 sm:px-5 ${
                     active
                       ? "border-[#123D73] bg-[#123D73] text-white"
                       : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -472,7 +474,7 @@ export default function CustomerReports({
                 >
                   {item.label}
                   <span
-                    className={`min-w-6 px-1.5 py-0.5 text-center text-xs font-bold ${
+                    className={`min-w-5 px-1 py-0.5 text-center text-xs font-bold sm:min-w-6 sm:px-1.5 ${
                       active
                         ? "bg-white/20 text-white"
                         : item.key === "pending" && counts.pending > 0

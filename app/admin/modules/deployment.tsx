@@ -160,10 +160,11 @@ function getLatestUpdate(deployment: DeploymentRow) {
   return { label: "Assigned", at: deployment.assigned_at };
 }
 
-/* UI-only class tokens (same look as the Submissions page). */
+/* UI-only class tokens (same look as the Submissions page).
+   Compact on phones, roomier from the `sm` breakpoint up. */
 const inputClass =
-  "w-full rounded-none border border-slate-300 bg-white px-4 py-3 text-base text-slate-800 shadow-sm placeholder:text-slate-400 transition-colors focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20";
-const labelClass = "mb-2 block text-sm font-bold text-slate-800";
+  "w-full rounded-none border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-800 shadow-sm placeholder:text-slate-400 transition-colors focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 sm:px-4 sm:py-3";
+const labelClass = "mb-1.5 block text-sm font-bold text-slate-800 sm:mb-2";
 
 /* =========================================
    DROPDOWN (same component style as Submissions)
@@ -275,7 +276,7 @@ function Dropdown({
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={toggle}
-        className="flex w-full items-center justify-between border border-slate-300 bg-white px-4 py-3 text-left text-base text-slate-800 shadow-sm transition-colors hover:border-[#123D73] focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20"
+        className="flex w-full items-center justify-between border border-slate-300 bg-white px-3 py-2.5 text-left text-base text-slate-800 shadow-sm transition-colors hover:border-[#123D73] focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 sm:px-4 sm:py-3"
       >
         <span
           className={
@@ -343,7 +344,7 @@ function Dropdown({
                     onChange(option.value);
                     close();
                   }}
-                  className={`w-full px-4 py-3 text-left text-base transition-colors ${
+                  className={`w-full px-3 py-2.5 text-left text-base transition-colors sm:px-4 sm:py-3 ${
                     option.value === value
                       ? "bg-blue-50 font-semibold text-[#123D73]"
                       : "text-slate-700 hover:bg-slate-50"
@@ -389,6 +390,9 @@ export default function Deployment() {
   >("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+
+  // UI only: the team filter is collapsed by default on phones.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   /* -------------------------
      LOAD DEPLOYMENTS
@@ -655,23 +659,163 @@ export default function Deployment() {
     { value: "resolved", label: "Resolved", count: counts.resolved },
   ];
 
+  // UI only: shown on the mobile Filters button (the status filter lives
+  // in the summary cards, so only the team filter is counted here).
+  const activeFilterCount = teamFilter !== "all" ? 1 : 0;
+
+  /* -------------------------
+     ACTIVITY LOG PANEL
+     (shared by the desktop table row and the mobile card)
+  ------------------------- */
+
+  const renderLog = (deployment: DeploymentRow) => {
+    const incident = deployment.incident;
+
+    const steps = [
+      {
+        key: "assigned",
+        label: "Assigned",
+        at: deployment.assigned_at,
+        note: "Team was assigned to this incident",
+        done: true,
+      },
+      {
+        key: "started",
+        label: "Started",
+        at: deployment.started_at,
+        note: "Field worker started the task",
+        done: Boolean(deployment.started_at),
+      },
+      {
+        key: "resolved",
+        label: "Resolved",
+        at: deployment.resolved_at,
+        note: "Task completed and incident set to Normal",
+        done: Boolean(deployment.resolved_at),
+      },
+    ];
+
+    return (
+      <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
+        {/* TIMELINE */}
+        <div className="lg:col-span-2">
+          <h3 className="text-base font-bold text-[#123D73]">
+            Activity log
+          </h3>
+
+          <ol className="mt-4 sm:mt-5">
+            {steps.map((step, index) => (
+              <li key={step.key} className="flex gap-4">
+                <div className="flex flex-col items-center">
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
+                      step.done
+                        ? step.key === "resolved"
+                          ? "bg-emerald-600"
+                          : "bg-[#123D73]"
+                        : "bg-slate-300"
+                    }`}
+                  >
+                    {step.done ? "✓" : index + 1}
+                  </span>
+
+                  {index < steps.length - 1 && (
+                    <span className="my-1 w-px flex-1 bg-slate-300" />
+                  )}
+                </div>
+
+                <div className="pb-5 sm:pb-6">
+                  <p
+                    className={`text-base font-semibold ${
+                      step.done ? "text-slate-900" : "text-slate-400"
+                    }`}
+                  >
+                    {step.label}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {step.done ? formatDateTime(step.at) : "Waiting..."}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {step.note}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        {/* DETAILS */}
+        <div className="grid grid-cols-2 gap-3 text-base lg:grid-cols-1 lg:gap-4">
+          <div className="border border-slate-300 bg-white p-3 sm:p-4">
+            <p className="text-sm font-bold text-slate-500">
+              Response time
+            </p>
+            <p className="mt-1.5 font-semibold text-slate-900">
+              {deployment.started_at
+                ? formatDuration(
+                    deployment.assigned_at,
+                    deployment.started_at
+                  )
+                : "Waiting for team to start"}
+            </p>
+          </div>
+
+          <div className="border border-slate-300 bg-white p-3 sm:p-4">
+            <p className="text-sm font-bold text-slate-500">
+              Work duration
+            </p>
+            <p className="mt-1.5 font-semibold text-slate-900">
+              {deployment.resolved_at
+                ? formatDuration(
+                    deployment.started_at,
+                    deployment.resolved_at,
+                    "Start time not recorded"
+                  )
+                : deployment.started_at
+                ? "In progress"
+                : "—"}
+            </p>
+          </div>
+
+          <div className="border border-slate-300 bg-white p-3 sm:p-4">
+            <p className="text-sm font-bold text-slate-500">ETR</p>
+            <p className="mt-1.5 font-semibold text-slate-900">
+              {formatDateTime(incident?.etr, "Not set")}
+            </p>
+          </div>
+
+          {incident?.description && (
+            <div className="col-span-2 border border-slate-300 bg-white p-3 sm:p-4 lg:col-span-1">
+              <p className="text-sm font-bold text-slate-500">
+                Description
+              </p>
+              <p className="mt-1.5 whitespace-pre-wrap leading-7 text-slate-700">
+                {incident.description}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   /* -------------------------
      RENDER
   ------------------------- */
 
   return (
-    <div className="space-y-6 border border-[#4438A8] bg-white p-6 text-slate-900 sm:p-8">
+    <div className="space-y-4 border border-[#4438A8] bg-white p-3 text-slate-900 sm:space-y-6 sm:p-8">
       {/* HEADER */}
-      <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-6 sm:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-bold text-indigo-100">
+      <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-4 py-4 sm:px-8 sm:py-6">
+        <div className="flex items-start justify-between gap-3 sm:items-center">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-indigo-100 sm:text-sm">
               Assignments
             </p>
-            <h2 className="mt-2 text-2xl font-bold text-white">
+            <h2 className="mt-1 text-xl font-bold text-white sm:mt-2 sm:text-2xl">
               Field Team Assignments
             </h2>
-            <p className="mt-2 text-base text-indigo-100">
+            <p className="mt-2 hidden text-base text-indigo-100 sm:block">
               Monitor assigned teams and the progress they report from
               the field portal.
             </p>
@@ -679,7 +823,7 @@ export default function Deployment() {
 
           <button
             onClick={() => void loadData()}
-            className="border border-white/30 bg-white/10 px-5 py-2.5 text-base font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40"
+            className="shrink-0 border border-white/30 bg-white/10 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 sm:px-5 sm:py-2.5 sm:text-base"
           >
             Refresh
           </button>
@@ -687,15 +831,15 @@ export default function Deployment() {
       </div>
 
       {/* STATUS SUMMARY (also works as a status filter) */}
-      <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
         {loading
           ? Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
-                className="border border-slate-300 bg-white p-5 sm:p-6"
+                className="border border-slate-300 bg-white p-3 sm:p-6"
               >
                 <Skeleton className="h-4 w-1/2" />
-                <Skeleton className="mt-4 h-9 w-1/4" />
+                <Skeleton className="mt-3 h-8 w-1/4 sm:mt-4 sm:h-9" />
               </div>
             ))
           : statCards.map((card) => {
@@ -707,16 +851,16 @@ export default function Deployment() {
                   type="button"
                   aria-pressed={active}
                   onClick={() => setStatusFilter(card.value)}
-                  className={`border p-5 text-left transition sm:p-6 ${
+                  className={`border p-3 text-left transition sm:p-6 ${
                     active
                       ? "border-[#123D73] bg-blue-50"
                       : "border-slate-300 bg-white hover:bg-slate-50"
                   }`}
                 >
-                  <p className="text-sm font-bold text-slate-600">
+                  <p className="text-xs font-bold text-slate-600 sm:text-sm">
                     {card.label}
                   </p>
-                  <p className="mt-3 text-3xl font-bold text-slate-900">
+                  <p className="mt-1.5 text-2xl font-bold text-slate-900 sm:mt-3 sm:text-3xl">
                     {card.count}
                   </p>
                 </button>
@@ -725,23 +869,60 @@ export default function Deployment() {
       </div>
 
       {/* FILTERS */}
-      <section className="border border-slate-300 bg-white p-6 sm:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end">
-          <div className="flex-1">
-            <label htmlFor="assignment-search" className={labelClass}>
-              Search
-            </label>
+      <section className="border border-slate-300 bg-white p-4 sm:p-8">
+        <div className="flex flex-col gap-3 sm:gap-5 lg:flex-row lg:items-end">
+          <div className="flex items-end gap-2 lg:contents">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="assignment-search" className={labelClass}>
+                Search
+              </label>
 
-            <input
-              id="assignment-search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Team, incident, barangay, station, description"
-              className={inputClass}
-            />
+              <input
+                id="assignment-search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Team, incident, barangay, station, description"
+                className={inputClass}
+              />
+            </div>
+
+            {/* Phone only: collapse / expand the team filter */}
+            <button
+              type="button"
+              aria-expanded={filtersOpen}
+              aria-controls="assignment-filters"
+              onClick={() => setFiltersOpen((open) => !open)}
+              className="flex shrink-0 items-center gap-2 border border-slate-300 bg-white px-3 py-2.5 text-base font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 sm:px-4 lg:hidden"
+            >
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="bg-[#123D73] px-1.5 text-xs font-semibold leading-5 text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+              <svg
+                className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${
+                  filtersOpen ? "rotate-180" : ""
+                }`}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.22 7.22a.75.75 0 011.06 0L10 10.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 8.28a.75.75 0 010-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
           </div>
 
-          <div className="w-full lg:w-72">
+          <div
+            id="assignment-filters"
+            className={`${
+              filtersOpen ? "block" : "hidden"
+            } w-full lg:block lg:w-72`}
+          >
             <label htmlFor="team-filter" className={labelClass}>
               Team
             </label>
@@ -761,26 +942,28 @@ export default function Deployment() {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-5 text-base text-slate-600">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-4 text-sm text-slate-600 sm:mt-6 sm:gap-3 sm:pt-5 sm:text-base">
           <span>
             {visibleDeployments.length}{" "}
             {visibleDeployments.length === 1
               ? "assignment"
               : "assignments"}{" "}
             shown
-            <span className="mx-2 text-slate-300">|</span>
-            Newest first
-            {lastUpdated && (
-              <>
-                <span className="mx-2 text-slate-300">|</span>
-                Updated{" "}
-                {lastUpdated.toLocaleTimeString("en-PH", {
-                  timeZone: "Asia/Manila",
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
-              </>
-            )}
+            <span className="hidden sm:inline">
+              <span className="mx-2 text-slate-300">|</span>
+              Newest first
+              {lastUpdated && (
+                <>
+                  <span className="mx-2 text-slate-300">|</span>
+                  Updated{" "}
+                  {lastUpdated.toLocaleTimeString("en-PH", {
+                    timeZone: "Asia/Manila",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </>
+              )}
+            </span>
           </span>
 
           <button
@@ -796,18 +979,19 @@ export default function Deployment() {
         </div>
       </section>
 
-      {/* TABLE */}
+      {/* TABLE (desktop) + CARDS (phone) */}
       <section className="overflow-hidden border border-[#4438A8] bg-white">
         {loadError && (
           <div
             role="alert"
-            className="m-6 border border-amber-200 bg-amber-50 p-4 text-base text-amber-800"
+            className="m-4 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:m-6 sm:text-base"
           >
             {loadError}
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        {/* Desktop table (hidden on phones / tablets) */}
+        <div className="hidden overflow-x-auto lg:block">
           <table className="w-full text-left [&_td]:border-r [&_td]:border-slate-200 [&_th]:border-r [&_th]:border-white/20 [&_td:last-child]:border-r-0 [&_th:last-child]:border-r-0">
             <thead className="border-b border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8]">
               <tr>
@@ -890,30 +1074,6 @@ export default function Deployment() {
                   const affectedNames = getAffectedNames(deployment);
                   const latest = getLatestUpdate(deployment);
                   const expanded = expandedId === deployment.id;
-
-                  const steps = [
-                    {
-                      key: "assigned",
-                      label: "Assigned",
-                      at: deployment.assigned_at,
-                      note: "Team was assigned to this incident",
-                      done: true,
-                    },
-                    {
-                      key: "started",
-                      label: "Started",
-                      at: deployment.started_at,
-                      note: "Field worker started the task",
-                      done: Boolean(deployment.started_at),
-                    },
-                    {
-                      key: "resolved",
-                      label: "Resolved",
-                      at: deployment.resolved_at,
-                      note: "Task completed and incident set to Normal",
-                      done: Boolean(deployment.resolved_at),
-                    },
-                  ];
 
                   return (
                     <Fragment key={deployment.id}>
@@ -1020,118 +1180,7 @@ export default function Deployment() {
                             colSpan={6}
                             className="bg-slate-50 px-6 py-8 sm:px-8"
                           >
-                            <div className="grid gap-8 lg:grid-cols-3">
-                              {/* TIMELINE */}
-                              <div className="lg:col-span-2">
-                                <h3 className="text-base font-bold text-[#123D73]">
-                                  Activity log
-                                </h3>
-
-                                <ol className="mt-5">
-                                  {steps.map((step, index) => (
-                                    <li
-                                      key={step.key}
-                                      className="flex gap-4"
-                                    >
-                                      <div className="flex flex-col items-center">
-                                        <span
-                                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
-                                            step.done
-                                              ? step.key === "resolved"
-                                                ? "bg-emerald-600"
-                                                : "bg-[#123D73]"
-                                              : "bg-slate-300"
-                                          }`}
-                                        >
-                                          {step.done ? "✓" : index + 1}
-                                        </span>
-
-                                        {index < steps.length - 1 && (
-                                          <span className="my-1 w-px flex-1 bg-slate-300" />
-                                        )}
-                                      </div>
-
-                                      <div className="pb-6">
-                                        <p
-                                          className={`text-base font-semibold ${
-                                            step.done
-                                              ? "text-slate-900"
-                                              : "text-slate-400"
-                                          }`}
-                                        >
-                                          {step.label}
-                                        </p>
-                                        <p className="mt-1 text-sm text-slate-600">
-                                          {step.done
-                                            ? formatDateTime(step.at)
-                                            : "Waiting..."}
-                                        </p>
-                                        <p className="mt-1 text-sm text-slate-500">
-                                          {step.note}
-                                        </p>
-                                      </div>
-                                    </li>
-                                  ))}
-                                </ol>
-                              </div>
-
-                              {/* DETAILS */}
-                              <div className="space-y-4 text-base">
-                                <div className="border border-slate-300 bg-white p-4">
-                                  <p className="text-sm font-bold text-slate-500">
-                                    Response time
-                                  </p>
-                                  <p className="mt-1.5 font-semibold text-slate-900">
-                                    {deployment.started_at
-                                      ? formatDuration(
-                                          deployment.assigned_at,
-                                          deployment.started_at
-                                        )
-                                      : "Waiting for team to start"}
-                                  </p>
-                                </div>
-
-                                <div className="border border-slate-300 bg-white p-4">
-                                  <p className="text-sm font-bold text-slate-500">
-                                    Work duration
-                                  </p>
-                                  <p className="mt-1.5 font-semibold text-slate-900">
-                                    {deployment.resolved_at
-                                      ? formatDuration(
-                                          deployment.started_at,
-                                          deployment.resolved_at,
-                                          "Start time not recorded"
-                                        )
-                                      : deployment.started_at
-                                      ? "In progress"
-                                      : "—"}
-                                  </p>
-                                </div>
-
-                                <div className="border border-slate-300 bg-white p-4">
-                                  <p className="text-sm font-bold text-slate-500">
-                                    ETR
-                                  </p>
-                                  <p className="mt-1.5 font-semibold text-slate-900">
-                                    {formatDateTime(
-                                      incident?.etr,
-                                      "Not set"
-                                    )}
-                                  </p>
-                                </div>
-
-                                {incident?.description && (
-                                  <div className="border border-slate-300 bg-white p-4">
-                                    <p className="text-sm font-bold text-slate-500">
-                                      Description
-                                    </p>
-                                    <p className="mt-1.5 whitespace-pre-wrap leading-7 text-slate-700">
-                                      {incident.description}
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                            {renderLog(deployment)}
                           </td>
                         </tr>
                       )}
@@ -1141,6 +1190,150 @@ export default function Deployment() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card list (replaces the wide table below lg) */}
+        <div className="divide-y divide-slate-300 lg:hidden">
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2 p-4">
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="h-4 w-1/3" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/5" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ))
+          ) : visibleDeployments.length === 0 ? (
+            <div className="px-4 py-12 text-center">
+              <p className="text-base font-semibold text-slate-900">
+                No matching assignments
+              </p>
+              <p className="mt-2 text-sm text-slate-500">
+                Assigned teams will appear here, or try changing your
+                search and filters.
+              </p>
+            </div>
+          ) : (
+            pagedDeployments.map((deployment) => {
+              const incident = deployment.incident;
+              const status = normalizeStatus(deployment.status);
+              const meta = STATUS_META[status];
+              const incidentStatus = getIncidentStatus(
+                incident?.status ?? "green"
+              );
+              const station = getStation(incident?.pumping_station_id);
+              const affectedNames = getAffectedNames(deployment);
+              const latest = getLatestUpdate(deployment);
+              const expanded = expandedId === deployment.id;
+
+              return (
+                <article key={deployment.id}>
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-base font-semibold leading-snug text-slate-900">
+                          {deployment.team?.name ?? "Unknown team"}
+                        </p>
+                        <p className="mt-0.5 wrap-break-word text-sm text-slate-700">
+                          {incident?.incident_type ?? "Unknown incident"}
+                        </p>
+                        <p className="mt-0.5 font-mono text-xs text-slate-500">
+                          INC-
+                          {String(deployment.incident_id).padStart(4, "0")}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`inline-flex h-7 shrink-0 items-center gap-1.5 border px-2 text-xs font-medium ${meta.badge}`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}`}
+                        />
+                        {meta.label}
+                      </span>
+                    </div>
+
+                    <dl className="mt-3 space-y-1.5 text-sm">
+                      <div className="flex gap-3">
+                        <dt className="w-20 shrink-0 font-semibold text-slate-500">
+                          Incident
+                        </dt>
+                        <dd className="min-w-0">
+                          <span
+                            className={`inline-flex items-center border px-2 py-0.5 text-xs font-medium ${incidentStatus.badge}`}
+                          >
+                            {incidentStatus.label}
+                          </span>
+                        </dd>
+                      </div>
+
+                      {station && (
+                        <div className="flex gap-3">
+                          <dt className="w-20 shrink-0 font-semibold text-slate-500">
+                            Station
+                          </dt>
+                          <dd className="min-w-0 wrap-break-word text-slate-900">
+                            {station.name}
+                          </dd>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3">
+                        <dt className="w-20 shrink-0 font-semibold text-slate-500">
+                          {affectedNames.length > 1
+                            ? "Barangays"
+                            : "Barangay"}
+                        </dt>
+                        <dd className="min-w-0 wrap-break-word text-slate-900">
+                          {affectedNames.length > 0
+                            ? affectedNames.join(", ")
+                            : "—"}
+                        </dd>
+                      </div>
+
+                      {incident?.affected_area && (
+                        <div className="flex gap-3">
+                          <dt className="w-20 shrink-0 font-semibold text-slate-500">
+                            Area
+                          </dt>
+                          <dd className="line-clamp-2 min-w-0 wrap-break-word text-slate-900">
+                            {incident.affected_area}
+                          </dd>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3">
+                        <dt className="w-20 shrink-0 font-semibold text-slate-500">
+                          {latest.label}
+                        </dt>
+                        <dd className="min-w-0 text-slate-900">
+                          {formatDateTime(latest.at)}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      onClick={() =>
+                        setExpandedId(expanded ? null : deployment.id)
+                      }
+                      className="mt-3 h-10 w-full border border-slate-300 bg-white text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                    >
+                      {expanded ? "Hide log" : "View log"}
+                    </button>
+                  </div>
+
+                  {expanded && (
+                    <div className="border-t border-slate-200 bg-slate-50 p-4">
+                      {renderLog(deployment)}
+                    </div>
+                  )}
+                </article>
+              );
+            })
+          )}
         </div>
 
         {!loading && (
@@ -1234,11 +1427,11 @@ function Pagination({
   const to = Math.min(page * pageSize, total);
 
   const btn =
-    "border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
+    "border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4";
 
   return (
-    <div className="flex flex-col gap-3 border-t border-slate-300 bg-slate-50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-      <p className="text-sm text-slate-600">
+    <div className="flex flex-col gap-2 border-t border-slate-300 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-8 sm:py-4">
+      <p className="text-center text-sm text-slate-600 sm:text-left">
         Showing{" "}
         <span className="font-semibold text-slate-900">
           {from}–{to}
@@ -1246,7 +1439,7 @@ function Pagination({
         of <span className="font-semibold text-slate-900">{total}</span>
       </p>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 sm:justify-end">
         <button
           type="button"
           disabled={page <= 1}
@@ -1256,7 +1449,7 @@ function Pagination({
           Previous
         </button>
 
-        <span className="px-3 text-sm font-semibold text-slate-700">
+        <span className="px-1 text-sm font-semibold text-slate-700 sm:px-3">
           Page {page} of {totalPages}
         </span>
 

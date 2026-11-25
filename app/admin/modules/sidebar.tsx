@@ -1,5 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+// User Management sends this event whenever it loads, so the badge updates
+// right after an approve or reject without waiting for the next check.
+const PENDING_USERS_EVENT = "districtlens:pending-users";
+const REFRESH_MS = 30_000; // check every 30 seconds
+
 type SidebarProps = {
   activeSection: string;
   setActiveSection: (section: string) => void;
@@ -166,6 +173,62 @@ export default function Sidebar({
   userRole,
   customerReportsPending = 0,
 }: SidebarProps) {
+  // Accounts waiting for approval (super admin only)
+  const [usersPending, setUsersPending] = useState(0);
+
+  useEffect(() => {
+    if (userRole !== "super_admin") return;
+
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const response = await fetch("/api/admin/users", {
+          cache: "no-store",
+        });
+
+        if (
+          !response.ok ||
+          !response.headers.get("content-type")?.includes("application/json")
+        ) {
+          return;
+        }
+
+        const data = await response.json();
+        const users: { status?: string }[] = Array.isArray(data.users)
+          ? data.users
+          : [];
+
+        if (!cancelled) {
+          setUsersPending(
+            users.filter((user) => user.status === "pending").length
+          );
+        }
+      } catch {
+        // keep the last known count
+      }
+    }
+
+    function onPendingEvent(event: Event) {
+      const count = (event as CustomEvent<number>).detail;
+      if (typeof count === "number") setUsersPending(count);
+    }
+
+    void load();
+
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, REFRESH_MS);
+
+    window.addEventListener(PENDING_USERS_EVENT, onPendingEvent);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      window.removeEventListener(PENDING_USERS_EVENT, onPendingEvent);
+    };
+  }, [userRole]);
+
   const visibleMenuItems = menuItems.filter((item) => {
     if (item.superAdminOnly) {
       return userRole === "super_admin";
@@ -179,8 +242,13 @@ export default function Sidebar({
       <div className="mx-auto flex w-full max-w-[1600px] items-center justify-center gap-1 overflow-x-auto px-4 sm:px-6 lg:px-8">
         {visibleMenuItems.map((item) => {
           const isActive = activeSection === item.id;
+
           const badge =
-            item.id === "customer-reports" ? customerReportsPending : 0;
+            item.id === "customer-reports"
+              ? customerReportsPending
+              : item.id === "users"
+                ? usersPending
+                : 0;
 
           return (
             <button

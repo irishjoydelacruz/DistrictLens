@@ -195,7 +195,7 @@ function LoginForm() {
         <section className="relative hidden flex-col items-center justify-center overflow-hidden bg-linear-to-br from-[#E6F0FA] via-[#DDF0F8] to-[#C6E9F5] px-6 py-12 md:flex md:min-h-[calc(100dvh-64px)]">
           {/* SOFT GLOW BEHIND LOGO */}
           <div
-            className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-[65%] rounded-full bg-white/60 blur-3xl"
+            className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 translate-y-[-65%] rounded-full bg-white/60 blur-3xl"
             aria-hidden="true"
           />
 

@@ -72,13 +72,18 @@ function toLocalInput(value: string | null | undefined): string {
 }
 
 // UI-only class tokens, kept in one place so the look stays consistent.
+// Compact on phones, roomier from the `sm` breakpoint up.
 const inputClass =
-  "w-full rounded-none border border-slate-300 bg-white px-4 py-3 text-base text-slate-800 shadow-sm placeholder:text-slate-400 transition-colors focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20";
-const labelClass = "mb-2 block text-sm font-bold text-slate-800";
+  "w-full rounded-none border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-800 shadow-sm placeholder:text-slate-400 transition-colors focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 sm:px-4 sm:py-3";
+const labelClass = "mb-1.5 block text-sm font-bold text-slate-800 sm:mb-2";
 const btnSecondary =
-  "rounded-none border border-slate-300 bg-white px-5 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
+  "rounded-none border border-slate-300 bg-white px-4 py-2.5 text-base font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-5 sm:py-3";
 const btnPrimary =
-  "rounded-none bg-[#123D73] px-5 py-3 text-base font-medium text-white hover:bg-[#0D2F59] disabled:cursor-not-allowed disabled:opacity-50";
+  "rounded-none bg-[#123D73] px-4 py-2.5 text-base font-medium text-white hover:bg-[#0D2F59] disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 sm:py-3";
+
+// Same size for every status / assignment badge in the table.
+const badgeBase =
+  "mx-auto flex h-9 w-full max-w-36 items-center justify-center gap-2 border px-2 text-center text-sm font-medium";
 
 type DropdownOption = { value: string; label: string };
 
@@ -190,7 +195,7 @@ function Dropdown({
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={toggle}
-        className="flex w-full items-center justify-between border border-slate-300 bg-white px-4 py-3 text-left text-base text-slate-800 shadow-sm transition-colors hover:border-[#123D73] focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20"
+        className="flex w-full items-center justify-between border border-slate-300 bg-white px-3 py-2.5 text-left text-base text-slate-800 shadow-sm transition-colors hover:border-[#123D73] focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 sm:px-4 sm:py-3"
       >
         <span
           className={
@@ -256,7 +261,7 @@ function Dropdown({
                     onChange(option.value);
                     close();
                   }}
-                  className={`w-full px-4 py-3 text-left text-base transition-colors ${
+                  className={`w-full px-3 py-2.5 text-left text-base transition-colors sm:px-4 sm:py-3 ${
                     option.value === value
                       ? "bg-blue-50 font-semibold text-[#123D73]"
                       : "text-slate-700 hover:bg-slate-50"
@@ -327,6 +332,9 @@ export default function Submissions() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [stationFilter, setStationFilter] = useState("all");
   const [assignmentFilter, setAssignmentFilter] = useState("all");
+
+  // UI only: filters are collapsed by default on phones.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [archiveMode, setArchiveMode] = useState<ArchiveMode>("recent");
   const [selectedDate, setSelectedDate] = useState("");
@@ -944,18 +952,27 @@ export default function Submissions() {
     )
   ).sort((a, b) => Number(b) - Number(a));
 
+  // UI only: number of active filters, shown on the mobile Filters button.
+  const activeFilterCount = [
+    archiveMode !== "recent",
+    typeFilter !== "all",
+    statusFilter !== "all",
+    stationFilter !== "all",
+    assignmentFilter !== "all",
+  ].filter(Boolean).length;
+
   return (
-    <div className="space-y-6 border border-[#4438A8] bg-white p-6 text-slate-900 sm:p-8">
-      <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-6 sm:px-8">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-bold text-indigo-100">
+    <div className="space-y-4 border border-[#4438A8] bg-white p-3 text-slate-900 sm:space-y-6 sm:p-8">
+      <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-4 py-4 sm:px-8 sm:py-6">
+        <div className="flex items-start justify-between gap-3 sm:items-center">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-indigo-100 sm:text-sm">
               Submissions
             </p>
-            <h2 className="mt-2 text-2xl font-bold text-white">
+            <h2 className="mt-1 text-xl font-bold text-white sm:mt-2 sm:text-2xl">
               Incident Reports
             </h2>
-            <p className="mt-2 text-base text-indigo-100">
+            <p className="mt-2 hidden text-base text-indigo-100 sm:block">
               View full report details or edit the report and its affected
               barangays.
             </p>
@@ -963,30 +980,67 @@ export default function Submissions() {
 
           <button
             onClick={() => void loadData()}
-            className="border border-white/30 bg-white/10 px-5 py-2.5 text-base font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40"
+            className="shrink-0 border border-white/30 bg-white/10 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 sm:px-5 sm:py-2.5 sm:text-base"
           >
             Refresh
           </button>
         </div>
       </div>
 
-      <section className="border border-slate-300 bg-white p-6 sm:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end">
-          <div className="flex-1">
-            <label htmlFor="submission-search" className={labelClass}>
-              Search
-            </label>
+      <section className="border border-slate-300 bg-white p-4 sm:p-8">
+        <div className="flex flex-col gap-3 sm:gap-5 lg:flex-row lg:items-end">
+          <div className="flex items-end gap-2 lg:contents">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="submission-search" className={labelClass}>
+                Search
+              </label>
 
-            <input
-              id="submission-search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="ID, incident, station, barangay, description"
-              className={inputClass}
-            />
+              <input
+                id="submission-search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ID, incident, station, barangay, description"
+                className={inputClass}
+              />
+            </div>
+
+            {/* Phone only: collapse / expand the rest of the filters */}
+            <button
+              type="button"
+              aria-expanded={filtersOpen}
+              aria-controls="submission-filters"
+              onClick={() => setFiltersOpen((open) => !open)}
+              className="flex shrink-0 items-center gap-2 border border-slate-300 bg-white px-3 py-2.5 text-base font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 sm:px-4 lg:hidden"
+            >
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="bg-[#123D73] px-1.5 text-xs font-semibold leading-5 text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+              <svg
+                className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${
+                  filtersOpen ? "rotate-180" : ""
+                }`}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.22 7.22a.75.75 0 011.06 0L10 10.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 8.28a.75.75 0 010-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
           </div>
 
-          <div className="w-full lg:w-56">
+          <div
+            id="submission-filters"
+            className={`${
+              filtersOpen ? "block" : "hidden"
+            } w-full lg:block lg:w-56`}
+          >
             <label htmlFor="archive-mode" className={labelClass}>
               Archive view
             </label>
@@ -1006,7 +1060,11 @@ export default function Submissions() {
           </div>
 
           {archiveMode === "date" && (
-            <div className="w-full lg:w-52">
+            <div
+              className={`${
+                filtersOpen ? "block" : "hidden"
+              } w-full lg:block lg:w-52`}
+            >
               <label htmlFor="archive-date" className={labelClass}>
                 Date
               </label>
@@ -1022,7 +1080,11 @@ export default function Submissions() {
           )}
 
           {archiveMode === "month" && (
-            <div className="w-full lg:w-52">
+            <div
+              className={`${
+                filtersOpen ? "block" : "hidden"
+              } w-full lg:block lg:w-52`}
+            >
               <label htmlFor="archive-month" className={labelClass}>
                 Month
               </label>
@@ -1038,7 +1100,11 @@ export default function Submissions() {
           )}
 
           {archiveMode === "year" && (
-            <div className="w-full lg:w-44">
+            <div
+              className={`${
+                filtersOpen ? "block" : "hidden"
+              } w-full lg:block lg:w-44`}
+            >
               <label htmlFor="archive-year" className={labelClass}>
                 Year
               </label>
@@ -1056,7 +1122,11 @@ export default function Submissions() {
           )}
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          className={`${
+            filtersOpen ? "grid" : "hidden"
+          } mt-3 grid-cols-2 gap-3 sm:mt-5 sm:gap-5 lg:grid lg:grid-cols-4 [&_label]:truncate`}
+        >
           <div>
             <label htmlFor="type-filter" className={labelClass}>
               Incident type
@@ -1149,14 +1219,16 @@ export default function Submissions() {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-5 text-base text-slate-600">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-4 text-sm text-slate-600 sm:mt-6 sm:gap-3 sm:pt-5 sm:text-base">
           <span>
             {visibleIncidents.length}{" "}
             {visibleIncidents.length === 1 ? "report" : "reports"} shown
-            <span className="mx-2 text-slate-300">|</span>
-            {archiveMode === "recent"
-              ? `Latest ${RECENT_LIMIT} reports by recent activity`
-              : "Most recently updated first"}
+            <span className="hidden sm:inline">
+              <span className="mx-2 text-slate-300">|</span>
+              {archiveMode === "recent"
+                ? `Latest ${RECENT_LIMIT} reports by recent activity`
+                : "Most recently updated first"}
+            </span>
           </span>
 
           <button
@@ -1183,39 +1255,42 @@ export default function Submissions() {
         {loadError && (
           <div
             role="alert"
-            className="m-6 border border-amber-200 bg-amber-50 p-4 text-base text-amber-800"
+            className="m-4 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:m-6 sm:text-base"
           >
             {loadError}
           </div>
         )}
 
-        <div className="overflow-x-auto lg:overflow-visible">
+        {/* Desktop table (hidden on phones / tablets) */}
+        <div className="hidden overflow-x-auto lg:block lg:overflow-visible">
           <table className="w-full min-w-275 table-fixed text-left lg:min-w-0 [&_td]:wrap-break-word [&_td]:border-r [&_td]:border-slate-200 [&_th]:border-r [&_th]:border-white/20 [&_td:last-child]:border-r-0 [&_th:last-child]:border-r-0">
             <colgroup>
-              <col className="w-[17%]" />
+              <col className="w-[16%]" />
+              <col className="w-[12%]" />
+              <col className="w-[18%]" />
               <col className="w-[13%]" />
-              <col className="w-[19%]" />
-              <col className="w-[11%]" />
               <col className="w-[15%]" />
               <col className="w-[11%]" />
-              <col className="w-[14%]" />
+              <col className="w-[15%]" />
             </colgroup>
             <thead className="border-b border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8]">
               <tr>
                 {[
-                  "Report",
-                  "Location",
-                  "Affected Barangays / Area",
-                  "Status",
-                  "Assigned Team",
-                  "Reported At",
-                  "Actions",
-                ].map((heading) => (
+                  { label: "Report", center: false },
+                  { label: "Location", center: false },
+                  { label: "Affected Barangays / Area", center: false },
+                  { label: "Status", center: true },
+                  { label: "Assigned Team", center: true },
+                  { label: "Reported At", center: false },
+                  { label: "Actions", center: true },
+                ].map(({ label, center }) => (
                   <th
-                    key={heading}
-                    className="px-4 py-4 text-xs font-semibold uppercase tracking-wide text-indigo-50 xl:text-sm"
+                    key={label}
+                    className={`px-4 py-4 text-xs font-semibold uppercase tracking-wide text-indigo-50 xl:text-sm ${
+                      center ? "text-center" : ""
+                    }`}
                   >
-                    {heading}
+                    {label}
                   </th>
                 ))}
               </tr>
@@ -1224,7 +1299,7 @@ export default function Submissions() {
             <tbody className="divide-y divide-slate-300">
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={i} className="align-top">
+                  <tr key={i} className="align-middle">
                     <td className="px-4 py-5">
                       <Skeleton className="h-5 w-3/4" />
                       <Skeleton className="mt-2 h-4 w-1/3" />
@@ -1244,12 +1319,12 @@ export default function Submissions() {
                     </td>
 
                     <td className="px-4 py-5">
-                      <Skeleton className="h-8 w-24" />
+                      <Skeleton className="mx-auto h-9 w-full max-w-36" />
                     </td>
 
                     <td className="px-4 py-5">
-                      <Skeleton className="h-5 w-3/4" />
-                      <Skeleton className="mt-2 h-7 w-20" />
+                      <Skeleton className="mx-auto h-5 w-3/4" />
+                      <Skeleton className="mx-auto mt-2 h-9 w-full max-w-36" />
                     </td>
 
                     <td className="px-4 py-5">
@@ -1257,10 +1332,10 @@ export default function Submissions() {
                       <Skeleton className="mt-2 h-4 w-14" />
                     </td>
 
-                    <td className="px-4 py-5">
-                      <div className="flex gap-2">
-                        <Skeleton className="h-9 w-14" />
-                        <Skeleton className="h-9 w-14" />
+                    <td className="px-2 py-5">
+                      <div className="flex justify-center gap-2">
+                        <Skeleton className="h-9 w-16" />
+                        <Skeleton className="h-9 w-16" />
                       </div>
                     </td>
                   </tr>
@@ -1296,7 +1371,7 @@ export default function Submissions() {
                   return (
                     <tr
                       key={incident.id}
-                      className="align-top hover:bg-slate-50"
+                      className="align-middle hover:bg-slate-50"
                     >
                       <td className="px-4 py-5">
                         <p className="text-base font-semibold text-slate-900">
@@ -1367,12 +1442,12 @@ export default function Submissions() {
 
                       <td className="px-4 py-5">
                         <span
-                          className={`inline-flex w-full max-w-32 items-center justify-center gap-2 border px-2 py-1.5 text-sm font-medium ${getStatusStyle(
+                          className={`${badgeBase} ${getStatusStyle(
                             incident.status
                           )}`}
                         >
                           <span
-                            className={`h-2 w-2 rounded-full ${getStatusDot(
+                            className={`h-2 w-2 shrink-0 rounded-full ${getStatusDot(
                               incident.status
                             )}`}
                           />
@@ -1382,7 +1457,9 @@ export default function Submissions() {
 
                       <td className="px-4 py-5">
                         {incidentAssignments.length === 0 ? (
-                          <span className="inline-flex w-full max-w-36 items-center justify-center border border-dashed border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-500">
+                          <span
+                            className={`${badgeBase} border-dashed border-slate-300 bg-white text-slate-500`}
+                          >
                             Unassigned
                           </span>
                         ) : (
@@ -1395,12 +1472,15 @@ export default function Submissions() {
                                   );
 
                                 return (
-                                  <div key={index}>
+                                  <div
+                                    key={index}
+                                    className="text-center"
+                                  >
                                     <p className="text-base font-semibold text-slate-900">
                                       {getTeamName(assignment)}
                                     </p>
                                     <span
-                                      className={`mt-1.5 inline-flex w-full max-w-28 items-center justify-center border px-2 py-1 text-sm font-semibold ${progress.className}`}
+                                      className={`${badgeBase} mt-1.5 font-semibold ${progress.className}`}
                                     >
                                       {progress.label}
                                     </span>
@@ -1430,11 +1510,11 @@ export default function Submissions() {
                           )}
                       </td>
 
-                      <td className="px-4 py-5">
-                        <div className="flex flex-wrap items-center gap-2">
+                      <td className="px-2 py-5">
+                        <div className="flex flex-wrap items-center justify-center gap-2">
                           <button
                             onClick={() => openView(incident)}
-                            className="border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                            className="h-9 w-16 border border-slate-300 bg-white text-center text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                           >
                             View
                           </button>
@@ -1442,7 +1522,7 @@ export default function Submissions() {
                           {/* FIX: Pass the incident through a callback. */}
                           <button
                             onClick={() => beginEdit(incident)}
-                            className="bg-[#123D73] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0D2F59]"
+                            className="h-9 w-16 bg-[#123D73] text-center text-sm font-medium text-white transition-colors hover:bg-[#0D2F59]"
                           >
                             Edit
                           </button>
@@ -1454,6 +1534,189 @@ export default function Submissions() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card list (replaces the wide table below lg) */}
+        <div className="divide-y divide-slate-300 lg:hidden">
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2 p-4">
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="h-4 w-1/4" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/5" />
+                <div className="flex gap-2 pt-1">
+                  <Skeleton className="h-10 flex-1" />
+                  <Skeleton className="h-10 flex-1" />
+                </div>
+              </div>
+            ))
+          ) : visibleIncidents.length === 0 ? (
+            <div className="px-4 py-12 text-center">
+              <p className="text-base font-semibold text-slate-900">
+                No matching submissions
+              </p>
+              <p className="mt-2 text-sm text-slate-500">
+                Try changing your search or archive filters.
+              </p>
+            </div>
+          ) : (
+            pagedIncidents.map((incident) => {
+              const affectedNames =
+                getIncidentAffectedCodes(incident).map(getBarangayName);
+
+              const station = stations.find(
+                (item) => item.id === incident.pumping_station_id
+              );
+
+              const incidentAssignments = assignments.filter(
+                (item) => item.incident_id === incident.id
+              );
+
+              return (
+                <article key={incident.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-base font-semibold leading-snug text-slate-900">
+                        {incident.incident_type}
+                      </p>
+                      <p className="mt-0.5 font-mono text-xs text-slate-500">
+                        INC-{String(incident.id).padStart(4, "0")}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`inline-flex h-7 shrink-0 items-center gap-1.5 border px-2 text-xs font-medium ${getStatusStyle(
+                        incident.status
+                      )}`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${getStatusDot(
+                          incident.status
+                        )}`}
+                      />
+                      {getStatusLabel(incident.status)}
+                    </span>
+                  </div>
+
+                  {incident.description && (
+                    <p className="mt-2 line-clamp-2 wrap-break-word text-sm leading-5 text-slate-600">
+                      {incident.description}
+                    </p>
+                  )}
+
+                  <dl className="mt-3 space-y-1.5 text-sm">
+                    <div className="flex gap-3">
+                      <dt className="w-20 shrink-0 font-semibold text-slate-500">
+                        Location
+                      </dt>
+                      <dd className="min-w-0 wrap-break-word text-slate-900">
+                        {getStationName(incident.pumping_station_id)}
+                        {incident.pumping_station_id != null &&
+                          station?.location && (
+                            <span className="block text-xs text-slate-500">
+                              {station.location}
+                            </span>
+                          )}
+                        {incident.pumping_station_id == null &&
+                          incident.barangay_code && (
+                            <span className="block text-xs text-slate-500">
+                              {getBarangayName(incident.barangay_code)}
+                            </span>
+                          )}
+                      </dd>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <dt className="w-20 shrink-0 font-semibold text-slate-500">
+                        {affectedNames.length > 1 ? "Barangays" : "Barangay"}
+                      </dt>
+                      <dd className="min-w-0 wrap-break-word text-slate-900">
+                        {affectedNames.length > 0
+                          ? affectedNames.join(", ")
+                          : "—"}
+                      </dd>
+                    </div>
+
+                    {incident.affected_area && (
+                      <div className="flex gap-3">
+                        <dt className="w-20 shrink-0 font-semibold text-slate-500">
+                          Area
+                        </dt>
+                        <dd className="line-clamp-2 min-w-0 wrap-break-word text-slate-900">
+                          {incident.affected_area}
+                        </dd>
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <dt className="w-20 shrink-0 font-semibold text-slate-500">
+                        Team
+                      </dt>
+                      <dd className="min-w-0">
+                        {incidentAssignments.length === 0 ? (
+                          <span className="text-slate-500">Unassigned</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {incidentAssignments.map((assignment, index) => {
+                              const progress = getAssignmentProgress(
+                                assignment.status
+                              );
+
+                              return (
+                                <span
+                                  key={index}
+                                  className={`inline-flex items-center gap-1 border px-2 py-0.5 text-xs font-medium ${progress.className}`}
+                                >
+                                  {getTeamName(assignment)}
+                                  <span className="opacity-70">·</span>
+                                  {progress.label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </dd>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <dt className="w-20 shrink-0 font-semibold text-slate-500">
+                        Reported
+                      </dt>
+                      <dd className="min-w-0 text-slate-900">
+                        {formatDateOnly(incident.reported_at)},{" "}
+                        {formatTimeOnly(incident.reported_at)}
+                        {incident.updated_at &&
+                          new Date(incident.updated_at).getTime() -
+                            new Date(incident.reported_at).getTime() >
+                            60000 && (
+                            <span className="block text-xs font-semibold text-[#123D73]">
+                              Updated {formatDateOnly(incident.updated_at)},{" "}
+                              {formatTimeOnly(incident.updated_at)}
+                            </span>
+                          )}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => openView(incident)}
+                      className="h-10 border border-slate-300 bg-white text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                    >
+                      View
+                    </button>
+                    <button
+                      onClick={() => beginEdit(incident)}
+                      className="h-10 bg-[#123D73] text-sm font-medium text-white transition-colors hover:bg-[#0D2F59]"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </article>
+              );
+            })
+          )}
         </div>
 
         {!loading && (
@@ -1469,7 +1732,7 @@ export default function Submissions() {
       {selectedIncident &&
         createPortal(
         <div
-          className="fixed inset-0 z-1000 flex items-center justify-center bg-slate-900/40 p-4"
+          className="fixed inset-0 z-1000 flex items-center justify-center bg-slate-900/40 p-2 sm:p-4"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               closeModal();
@@ -1480,9 +1743,9 @@ export default function Submissions() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="incident-modal-title"
-            className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden border border-[#4438A8] bg-white shadow-lg"
+            className="flex max-h-[calc(100dvh-1rem)] w-full max-w-3xl flex-col overflow-hidden border border-[#4438A8] bg-white shadow-lg sm:max-h-[calc(100dvh-2rem)]"
           >
-            <div className="flex shrink-0 items-start justify-between border-b border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-5 sm:px-8">
+            <div className="flex shrink-0 items-start justify-between border-b border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-4 py-4 sm:px-8 sm:py-5">
               <div>
                 <h2
                   id="incident-modal-title"
@@ -1508,8 +1771,8 @@ export default function Submissions() {
             </div>
 
             {editing ? (
-              <div className="space-y-6 overflow-y-auto p-6 sm:p-8">
-                <div className="grid gap-5 sm:grid-cols-2">
+              <div className="space-y-5 overflow-y-auto p-4 sm:space-y-6 sm:p-8">
+                <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                   <div>
                     <label className={labelClass}>Location type</label>
 
@@ -1639,7 +1902,7 @@ export default function Submissions() {
                   </div>
                 )}
 
-                <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                   <div>
                     <label className={labelClass}>Incident type</label>
 
@@ -1700,7 +1963,7 @@ export default function Submissions() {
                   </div>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-5 sm:space-y-6">
                   <div>
                     <label className={labelClass}>Affected area</label>
 
@@ -1768,7 +2031,7 @@ export default function Submissions() {
                     </button>
 
                     {etrOpen && (
-                      <div className="mt-2 rounded-md border border-slate-200 bg-white p-4">
+                      <div className="mt-2 rounded-md border border-slate-200 bg-white p-3 sm:p-4">
                         <div className="flex items-center justify-between">
                           <button
                             type="button"
@@ -1963,14 +2226,14 @@ export default function Submissions() {
                   </p>
                 )}
 
-                <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
+                <div className="flex gap-2 border-t border-slate-200 pt-4 sm:justify-end sm:gap-3">
                   <button
                     disabled={saving}
                     onClick={() => {
                       setEditing(false);
                       setActionError("");
                     }}
-                    className={btnSecondary}
+                    className={`${btnSecondary} flex-1 sm:flex-none`}
                   >
                     Cancel
                   </button>
@@ -1984,15 +2247,15 @@ export default function Submissions() {
                         : !editForm.barangay_code)
                     }
                     onClick={() => setConfirmSave(true)}
-                    className={btnPrimary}
+                    className={`${btnPrimary} flex-1 sm:flex-none`}
                   >
                     {saving ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="space-y-7 overflow-y-auto p-6 sm:p-8">
-                <dl className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
+              <div className="space-y-5 overflow-y-auto p-4 sm:space-y-7 sm:p-8">
+                <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2 sm:gap-y-6">
                   <div>
                     <dt className="text-sm font-semibold text-slate-500">
                       Incident type
@@ -2131,14 +2394,17 @@ export default function Submissions() {
                   </p>
                 )}
 
-                <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:justify-between">
-                  <button onClick={closeModal} className={btnSecondary}>
+                <div className="flex gap-2 border-t border-slate-200 pt-4 sm:justify-between">
+                  <button
+                    onClick={closeModal}
+                    className={`${btnSecondary} flex-1 sm:flex-none`}
+                  >
                     Close
                   </button>
 
                   <button
                     onClick={() => beginEdit(selectedIncident)}
-                    className={btnPrimary}
+                    className={`${btnPrimary} flex-1 sm:flex-none`}
                   >
                     Edit Report
                   </button>
@@ -2304,11 +2570,11 @@ function Pagination({
   const to = Math.min(page * pageSize, total);
 
   const btn =
-    "border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
+    "border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4";
 
   return (
-    <div className="flex flex-col gap-3 border-t border-slate-300 bg-slate-50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-      <p className="text-sm text-slate-600">
+    <div className="flex flex-col gap-2 border-t border-slate-300 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-8 sm:py-4">
+      <p className="text-center text-sm text-slate-600 sm:text-left">
         Showing{" "}
         <span className="font-semibold text-slate-900">
           {from}–{to}
@@ -2316,7 +2582,7 @@ function Pagination({
         of <span className="font-semibold text-slate-900">{total}</span>
       </p>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 sm:justify-end">
         <button
           type="button"
           disabled={page <= 1}
@@ -2326,7 +2592,7 @@ function Pagination({
           Previous
         </button>
 
-        <span className="px-3 text-sm font-semibold text-slate-700">
+        <span className="px-1 text-sm font-semibold text-slate-700 sm:px-3">
           Page {page} of {totalPages}
         </span>
 

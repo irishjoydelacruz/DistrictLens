@@ -15,183 +15,6 @@ import FrequentIncidents from "./modules/frequent-incidents";
 import Deployment from "./modules/deployment";
 import UserManagement from "./modules/user-management";
 
-type ResetRequest = { id: string; fullName: string };
-
-/* NOTIFICATION BELL (Super Admin only)
-   Shows users who used "Forgot password" and are waiting for a new
-   temporary password. Uses the existing /api/admin/users endpoint. */
-
-function NotificationBell({
-  enabled,
-  refreshKey,
-  onOpenUsers,
-}: {
-  enabled: boolean;
-  refreshKey: string;
-  onOpenUsers: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [requests, setRequests] = useState<ResetRequest[]>([]);
-
-  const load = useCallback(async () => {
-    try {
-      const response = await fetch("/api/admin/users", {
-        cache: "no-store",
-      });
-
-      if (!response.ok) return;
-
-      const data = await response.json();
-
-      setRequests(
-        ((data.users ?? []) as {
-          id: string;
-          fullName: string | null;
-          resetRequested?: boolean;
-        }[])
-          .filter((user) => user.resetRequested)
-          .map((user) => ({
-            id: user.id,
-            fullName: user.fullName || "Unknown user",
-          }))
-      );
-    } catch (error) {
-      console.error("Unable to load notifications:", error);
-    }
-  }, []);
-
-  // Check on load, when the admin changes pages, and every 30 seconds.
-  useEffect(() => {
-    if (!enabled) return;
-
-    void load();
-
-    const timer = window.setInterval(() => void load(), 30000);
-    return () => window.clearInterval(timer);
-  }, [enabled, load, refreshKey]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open]);
-
-  if (!enabled) return null;
-
-  return (
-    <div className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => {
-          setOpen((current) => !current);
-          void load();
-        }}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        aria-label={
-          requests.length > 0
-            ? `Notifications, ${requests.length} pending`
-            : "Notifications"
-        }
-        className="relative flex h-13 w-13 items-center justify-center border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          className="h-6 w-6"
-          aria-hidden="true"
-        >
-          <path
-            d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9Z"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M10 19a2 2 0 0 0 4 0"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-
-        {requests.length > 0 && (
-          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center bg-red-600 px-1 text-xs font-bold text-white">
-            {requests.length > 9 ? "9+" : requests.length}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Close notifications"
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-1001 cursor-default"
-          />
-
-          <div
-            role="menu"
-            className="absolute right-0 top-[calc(100%+8px)] z-1002 w-[min(22rem,calc(100vw-2rem))] border border-slate-200 bg-white shadow-lg"
-          >
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <p className="text-base font-bold text-[#123D73]">
-                Notifications
-              </p>
-
-              {requests.length > 0 && (
-                <span className="bg-red-50 px-2.5 py-1 text-sm font-semibold text-red-700">
-                  {requests.length} pending
-                </span>
-              )}
-            </div>
-
-            {requests.length === 0 ? (
-              <p className="px-5 py-8 text-center text-base text-slate-500">
-                No pending password requests.
-              </p>
-            ) : (
-              <>
-                <ul className="max-h-72 divide-y divide-slate-200 overflow-y-auto">
-                  {requests.map((request) => (
-                    <li key={request.id} className="px-5 py-4">
-                      <p className="wrap-break-word text-base font-semibold text-slate-900">
-                        {request.fullName}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        Requested a new temporary password.
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-
-                <div className="border-t border-slate-200 p-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpen(false);
-                      onOpenUsers();
-                    }}
-                    className="w-full bg-[#123D73] px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-[#0D2F59]"
-                  >
-                    Open User Management
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 export default function AdminPage() {
   const [activeSection, setActiveSection] = useState("dashboard");
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -261,7 +84,7 @@ export default function AdminPage() {
               ? "Super Admin"
               : profile.role === "customer_service"
                 ? "Customer Service"
-                : profile.role === "field_team"
+                : profile.role === "field_worker"
                   ? "Field Team"
                   : profile.role;
 
@@ -400,15 +223,6 @@ export default function AdminPage() {
             </div>
           </button>
 
-          <div className="flex shrink-0 items-center gap-3">
-          {/* NOTIFICATIONS */}
-
-          <NotificationBell
-            enabled={userRoleKey === "super_admin"}
-            refreshKey={activeSection}
-            onOpenUsers={() => handleSectionChange("users")}
-          />
-
           {/* USER PROFILE MENU */}
 
           <div className="relative shrink-0">
@@ -513,7 +327,6 @@ export default function AdminPage() {
                 </div>
               </>
             )}
-          </div>
           </div>
         </div>
       </header>

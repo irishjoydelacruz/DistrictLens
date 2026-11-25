@@ -226,6 +226,10 @@ export default function FrequentIncidents() {
     useState<CardId[]>(DEFAULT_CARDS);
   const [cardsLoaded, setCardsLoaded] = useState(false);
 
+  // UI only: on phones the card list can be collapsed. It starts open, and
+  // starts closed when the user already has saved cards.
+  const [pickerOpen, setPickerOpen] = useState(true);
+
   // Load the saved choice once, after the page mounts
   useEffect(() => {
     try {
@@ -235,11 +239,12 @@ export default function FrequentIncidents() {
         const parsed = JSON.parse(saved);
 
         if (Array.isArray(parsed)) {
-          setSelectedCards(
-            parsed.filter((id): id is CardId =>
-              ALL_CARD_IDS.includes(id)
-            )
+          const validCards = parsed.filter((id): id is CardId =>
+            ALL_CARD_IDS.includes(id)
           );
+
+          setSelectedCards(validCards);
+          if (validCards.length > 0) setPickerOpen(false);
         }
       }
     } catch (error) {
@@ -717,253 +722,253 @@ export default function FrequentIncidents() {
 
       case "frequency":
         return (
-                <Panel
-                  title="Incident Frequency"
-                  description="Number of reports by incident type"
-                  handle={handleFor("frequency")}
-                  onRemove={() => toggleCard("frequency")}
-                >
-                  {total === 0 ? (
-                    <EmptyNote text="No incident reports in this period." />
-                  ) : (
-                    <ul className="space-y-7">
-                      {typeCounts.map((item) => (
-                        <li key={item.type}>
-                          <div className="mb-2.5 flex items-center justify-between gap-4">
-                            <span className="flex min-w-0 items-center gap-3 text-base font-medium text-slate-800">
-                              <span
-                                className="h-3 w-3 shrink-0"
-                                style={{
-                                  backgroundColor:
-                                    INCIDENT_COLORS[item.type] ?? "#3b82f6",
-                                }}
-                              />
-                              <span className="truncate">{item.type}</span>
-                            </span>
+          <Panel
+            title="Incident Frequency"
+            description="Number of reports by incident type"
+            handle={handleFor("frequency")}
+            onRemove={() => toggleCard("frequency")}
+          >
+            {total === 0 ? (
+              <EmptyNote text="No incident reports in this period." />
+            ) : (
+              <ul className="space-y-5 sm:space-y-7">
+                {typeCounts.map((item) => (
+                  <li key={item.type}>
+                    <div className="mb-2 flex items-center justify-between gap-3 sm:mb-2.5 sm:gap-4">
+                      <span className="flex min-w-0 items-center gap-2.5 text-sm font-medium text-slate-800 sm:gap-3 sm:text-base">
+                        <span
+                          className="h-3 w-3 shrink-0"
+                          style={{
+                            backgroundColor:
+                              INCIDENT_COLORS[item.type] ?? "#3b82f6",
+                          }}
+                        />
+                        <span className="truncate">{item.type}</span>
+                      </span>
 
-                            <span className="shrink-0 text-base font-bold text-[#123D73]">
-                              {item.count}
-                              <span className="ml-2 text-sm font-medium text-slate-500">
-                                ({percent(item.count)}%)
-                              </span>
-                            </span>
-                          </div>
+                      <span className="shrink-0 text-sm font-bold text-[#123D73] sm:text-base">
+                        {item.count}
+                        <span className="ml-1.5 text-xs font-medium text-slate-500 sm:ml-2 sm:text-sm">
+                          ({percent(item.count)}%)
+                        </span>
+                      </span>
+                    </div>
 
-                          <div className="h-3 w-full bg-slate-100">
-                            <div
-                              className="h-full transition-all"
-                              style={{
-                                width: `${(item.count / maxType) * 100}%`,
-                                backgroundColor:
-                                  INCIDENT_COLORS[item.type] ?? "#3b82f6",
-                              }}
-                            />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Panel>
+                    <div className="h-2.5 w-full bg-slate-100 sm:h-3">
+                      <div
+                        className="h-full transition-all"
+                        style={{
+                          width: `${(item.count / maxType) * 100}%`,
+                          backgroundColor:
+                            INCIDENT_COLORS[item.type] ?? "#3b82f6",
+                        }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
         );
 
       case "trend":
         return (
-                <Panel
-                  title="Monthly Trend"
-                  description="Reports per month, last 6 months"
-                  handle={handleFor("trend")}
-                  onRemove={() => toggleCard("trend")}
+          <Panel
+            title="Monthly Trend"
+            description="Reports per month, last 6 months"
+            handle={handleFor("trend")}
+            onRemove={() => toggleCard("trend")}
+          >
+            <div className="flex h-52 items-end gap-2 border-b border-slate-300 px-1 sm:h-72 sm:gap-5 sm:px-2">
+              {monthlyTrend.map((month) => (
+                <div
+                  key={month.key}
+                  className="flex h-full min-w-0 flex-1 flex-col justify-end"
                 >
-                  <div className="flex h-72 items-end gap-5 border-b border-slate-300 px-2">
-                    {monthlyTrend.map((month) => (
-                      <div
-                        key={month.key}
-                        className="flex h-full min-w-0 flex-1 flex-col justify-end"
-                      >
-                        <span className="mb-2 text-center text-sm font-bold text-[#123D73]">
-                          {month.count}
-                        </span>
+                  <span className="mb-1.5 text-center text-xs font-bold text-[#123D73] sm:mb-2 sm:text-sm">
+                    {month.count}
+                  </span>
 
-                        <div
-                          title={`${month.label} ${month.year}: ${month.count}`}
-                          className="w-full bg-[#123D73]"
-                          style={{
-                            height: `${
-                              month.count > 0
-                                ? Math.max(4, (month.count / maxMonth) * 85)
-                                : 0
-                            }%`,
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
+                  <div
+                    title={`${month.label} ${month.year}: ${month.count}`}
+                    className="w-full bg-[#123D73]"
+                    style={{
+                      height: `${
+                        month.count > 0
+                          ? Math.max(4, (month.count / maxMonth) * 85)
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
 
-                  <div className="mt-3 flex gap-5 px-2">
-                    {monthlyTrend.map((month) => (
-                      <span
-                        key={month.key}
-                        className="min-w-0 flex-1 text-center text-sm font-medium text-slate-600"
-                      >
-                        {month.label}
-                      </span>
-                    ))}
-                  </div>
-                </Panel>
+            <div className="mt-2 flex gap-2 px-1 sm:mt-3 sm:gap-5 sm:px-2">
+              {monthlyTrend.map((month) => (
+                <span
+                  key={month.key}
+                  className="min-w-0 flex-1 text-center text-xs font-medium text-slate-600 sm:text-sm"
+                >
+                  {month.label}
+                </span>
+              ))}
+            </div>
+          </Panel>
         );
 
       case "barangays":
         return (
-                <Panel
-                  title="Affected Barangays"
-                  description={`All ${barangayCounts.length} barangays with reports. Pumping station incidents count toward every barangay they affected.`}
-                  handle={handleFor("barangays")}
-                  onRemove={() => toggleCard("barangays")}
-                >
-                  {barangayCounts.length === 0 ? (
-                    <EmptyNote text="No barangay data in this period." />
-                  ) : (
-                    <>
-                      <ol className="grid grid-cols-1 gap-x-16 gap-y-7 2xl:grid-cols-2">
-                        {barangayView.pageItems.map((item, index) => {
-                          // Rank continues across pages (page 2 starts at 11)
-                          const rank =
-                            (barangayView.page - 1) * PAGE_SIZE + index;
+          <Panel
+            title="Affected Barangays"
+            description={`All ${barangayCounts.length} barangays with reports. Pumping station incidents count toward every barangay they affected.`}
+            handle={handleFor("barangays")}
+            onRemove={() => toggleCard("barangays")}
+          >
+            {barangayCounts.length === 0 ? (
+              <EmptyNote text="No barangay data in this period." />
+            ) : (
+              <>
+                <ol className="grid grid-cols-1 gap-x-16 gap-y-5 sm:gap-y-7 2xl:grid-cols-2">
+                  {barangayView.pageItems.map((item, index) => {
+                    // Rank continues across pages (page 2 starts at 11)
+                    const rank =
+                      (barangayView.page - 1) * PAGE_SIZE + index;
 
-                          return (
-                            <li key={item.code}>
-                              <div className="flex items-center gap-4">
+                    return (
+                      <li key={item.code}>
+                        <div className="flex items-center gap-3 sm:gap-4">
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center text-sm font-bold sm:h-10 sm:w-10 sm:text-base ${
+                              rank === 0
+                                ? "bg-[#123D73] text-white"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {rank + 1}
+                          </span>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2 sm:gap-4">
+                              <p
+                                title={item.name}
+                                className={`truncate text-sm font-semibold sm:text-base ${
+                                  rank === 0
+                                    ? "text-[#123D73]"
+                                    : "text-slate-800"
+                                }`}
+                              >
+                                {item.name}
+                              </p>
+
+                              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                                 <span
-                                  className={`flex h-10 w-10 shrink-0 items-center justify-center text-base font-bold ${
-                                    rank === 0
-                                      ? "bg-[#123D73] text-white"
-                                      : "bg-slate-100 text-slate-500"
-                                  }`}
+                                  className={`inline-block w-20 border px-1 py-0.5 text-center text-xs font-semibold sm:w-28 sm:px-3 sm:py-1 sm:text-sm ${statusBadge(
+                                    item.status
+                                  )}`}
                                 >
-                                  {rank + 1}
+                                  {statusLabel(item.status)}
                                 </span>
 
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center justify-between gap-4">
-                                    <p
-                                      title={item.name}
-                                      className={`truncate text-base font-semibold ${
-                                        rank === 0
-                                          ? "text-[#123D73]"
-                                          : "text-slate-800"
-                                      }`}
-                                    >
-                                      {item.name}
-                                    </p>
-
-                                    <div className="flex shrink-0 items-center gap-3">
-                                      <span
-                                        className={`inline-block w-28 border px-3 py-1 text-center text-sm font-semibold ${statusBadge(
-                                          item.status
-                                        )}`}
-                                      >
-                                        {statusLabel(item.status)}
-                                      </span>
-
-                                      <span className="min-w-12 text-right text-base font-bold text-[#123D73]">
-                                        {item.count}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  <div className="mt-2.5 h-3 w-full bg-slate-100">
-                                    <div
-                                      className="h-full transition-all"
-                                      style={{
-                                        width: `${Math.max(
-                                          4,
-                                          (item.count / maxBarangay) * 100
-                                        )}%`,
-                                        backgroundColor: statusColor(
-                                          item.status
-                                        ),
-                                      }}
-                                    />
-                                  </div>
-                                </div>
+                                <span className="min-w-7 text-right text-sm font-bold text-[#123D73] sm:min-w-12 sm:text-base">
+                                  {item.count}
+                                </span>
                               </div>
-                            </li>
-                          );
-                        })}
-                      </ol>
+                            </div>
 
-                      <p className="mt-8 border-t border-slate-200 pt-5 text-base text-slate-500">
-                        Bar color shows the most severe current status in
-                        that barangay.
-                      </p>
+                            <div className="mt-2 h-2.5 w-full bg-slate-100 sm:mt-2.5 sm:h-3">
+                              <div
+                                className="h-full transition-all"
+                                style={{
+                                  width: `${Math.max(
+                                    4,
+                                    (item.count / maxBarangay) * 100
+                                  )}%`,
+                                  backgroundColor: statusColor(
+                                    item.status
+                                  ),
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
 
-                      <div className="-mx-6 -mb-6 mt-6 sm:-mx-8 sm:-mb-8">
-                        <Pagination
-                          page={barangayView.page}
-                          totalPages={barangayView.totalPages}
-                          total={barangayCounts.length}
-                          onPageChange={setBarangayPage}
-                        />
-                      </div>
-                    </>
-                  )}
-                </Panel>
+                <p className="mt-6 border-t border-slate-200 pt-4 text-sm text-slate-500 sm:mt-8 sm:pt-5 sm:text-base">
+                  Bar color shows the most severe current status in
+                  that barangay.
+                </p>
+
+                <div className="-mx-4 -mb-4 mt-5 sm:-mx-8 sm:-mb-8 sm:mt-6">
+                  <Pagination
+                    page={barangayView.page}
+                    totalPages={barangayView.totalPages}
+                    total={barangayCounts.length}
+                    onPageChange={setBarangayPage}
+                  />
+                </div>
+              </>
+            )}
+          </Panel>
         );
 
       case "stations":
         return (
-                <Panel
-                  title="Pumping Station Incidents"
-                  description="Reports linked to a pumping station"
-                  handle={handleFor("stations")}
-                  onRemove={() => toggleCard("stations")}
-                >
-                  {stationCounts.length === 0 ? (
-                    <EmptyNote text="No pumping station incidents in this period." />
-                  ) : (
-                    <>
-                      <ul className="grid grid-cols-1 gap-x-16 gap-y-7 2xl:grid-cols-2">
-                        {stationView.pageItems.map((item) => (
-                          <li key={item.id}>
-                            <div className="mb-2.5 flex items-center justify-between gap-4">
-                              <span
-                                title={item.name}
-                                className="truncate text-base font-medium text-slate-800"
-                              >
-                                {item.name}
-                              </span>
+          <Panel
+            title="Pumping Station Incidents"
+            description="Reports linked to a pumping station"
+            handle={handleFor("stations")}
+            onRemove={() => toggleCard("stations")}
+          >
+            {stationCounts.length === 0 ? (
+              <EmptyNote text="No pumping station incidents in this period." />
+            ) : (
+              <>
+                <ul className="grid grid-cols-1 gap-x-16 gap-y-5 sm:gap-y-7 2xl:grid-cols-2">
+                  {stationView.pageItems.map((item) => (
+                    <li key={item.id}>
+                      <div className="mb-2 flex items-center justify-between gap-3 sm:mb-2.5 sm:gap-4">
+                        <span
+                          title={item.name}
+                          className="truncate text-sm font-medium text-slate-800 sm:text-base"
+                        >
+                          {item.name}
+                        </span>
 
-                              <span className="shrink-0 text-base font-bold text-[#123D73]">
-                                {item.count}
-                              </span>
-                            </div>
+                        <span className="shrink-0 text-sm font-bold text-[#123D73] sm:text-base">
+                          {item.count}
+                        </span>
+                      </div>
 
-                            <div className="h-3 w-full bg-slate-100">
-                              <div
-                                className="h-full bg-[#123D73] transition-all"
-                                style={{
-                                  width: `${Math.max(
-                                    4,
-                                    (item.count / maxStation) * 100
-                                  )}%`,
-                                }}
-                              />
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-
-                      <div className="-mx-6 -mb-6 mt-8 sm:-mx-8 sm:-mb-8">
-                        <Pagination
-                          page={stationView.page}
-                          totalPages={stationView.totalPages}
-                          total={stationCounts.length}
-                          onPageChange={setStationPage}
+                      <div className="h-2.5 w-full bg-slate-100 sm:h-3">
+                        <div
+                          className="h-full bg-[#123D73] transition-all"
+                          style={{
+                            width: `${Math.max(
+                              4,
+                              (item.count / maxStation) * 100
+                            )}%`,
+                          }}
                         />
                       </div>
-                    </>
-                  )}
-                </Panel>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="-mx-4 -mb-4 mt-6 sm:-mx-8 sm:-mb-8 sm:mt-8">
+                  <Pagination
+                    page={stationView.page}
+                    totalPages={stationView.totalPages}
+                    total={stationCounts.length}
+                    onPageChange={setStationPage}
+                  />
+                </div>
+              </>
+            )}
+          </Panel>
         );
 
       default:
@@ -976,24 +981,26 @@ export default function FrequentIncidents() {
   ------------------------- */
 
   return (
-    <div className="space-y-8 border border-[#4438A8] bg-white p-6 text-slate-900 sm:p-8">
+    <div className="space-y-4 border border-[#4438A8] bg-white p-3 text-slate-900 sm:space-y-8 sm:p-8">
       {/* HEADER */}
-      <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-6 sm:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-bold text-indigo-100">Analytics</p>
-            <h2 className="mt-2 text-2xl font-bold text-white">
+      <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-4 py-4 sm:px-8 sm:py-6">
+        <div className="flex items-start justify-between gap-3 sm:items-center">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-indigo-100 sm:text-sm">
+              Analytics
+            </p>
+            <h2 className="mt-1 text-xl font-bold text-white sm:mt-2 sm:text-2xl">
               Incident Analytics
             </h2>
-            <p className="mt-2 text-base text-indigo-100">
-              Add the cards you want from the list on the right. They show
-              in the order you add them, and you can drag them to rearrange.
+            <p className="mt-2 hidden text-base text-indigo-100 sm:block">
+              Add the cards you want from the Cards list. They show in the
+              order you add them, and you can drag them to rearrange.
             </p>
           </div>
 
           <button
             onClick={() => void loadData()}
-            className="border border-white/30 bg-white/10 px-5 py-2.5 text-base font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40"
+            className="shrink-0 border border-white/30 bg-white/10 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 sm:px-5 sm:py-2.5 sm:text-base"
           >
             Refresh
           </button>
@@ -1003,28 +1010,29 @@ export default function FrequentIncidents() {
       {loadError && (
         <div
           role="alert"
-          className="border border-amber-200 bg-amber-50 p-4 text-base text-amber-800"
+          className="border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 sm:p-4 sm:text-base"
         >
           {loadError}
         </div>
       )}
 
       {/* PERIOD FILTER */}
-      <section className="border border-slate-300 bg-white p-6 sm:p-8">
+      <section className="border border-slate-300 bg-white p-4 sm:p-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-base font-bold text-slate-800">Period</p>
-            <p className="mt-1 text-base text-slate-500">
+            <p className="mt-1 text-sm text-slate-500 sm:text-base">
               {period === "recent"
                 ? `Latest ${RECENT_LIMIT} reports, newest first (${total} shown)`
                 : `${total} ${total === 1 ? "report" : "reports"} in the selected period`}
             </p>
           </div>
 
+          {/* Scrolls sideways on phones so it stays on one line */}
           <div
             role="group"
             aria-label="Select period"
-            className="grid grid-cols-2 sm:flex"
+            className="-mx-1 flex overflow-x-auto px-1 sm:mx-0 sm:overflow-visible sm:px-0"
           >
             {PERIOD_OPTIONS.map((option) => {
               const active = period === option.value;
@@ -1035,7 +1043,7 @@ export default function FrequentIncidents() {
                   type="button"
                   aria-pressed={active}
                   onClick={() => setPeriod(option.value)}
-                  className={`border px-5 py-3 text-base font-medium transition-colors sm:-ml-px sm:first:ml-0 ${
+                  className={`-ml-px shrink-0 whitespace-nowrap border px-4 py-2.5 text-sm font-medium transition-colors first:ml-0 sm:px-5 sm:py-3 sm:text-base ${
                     active
                       ? "border-[#123D73] bg-[#123D73] text-white"
                       : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -1050,33 +1058,35 @@ export default function FrequentIncidents() {
       </section>
 
       {/* CARDS + PICKER */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 gap-4 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* Picker: first on mobile, right side on desktop */}
         <aside className="order-first min-w-0 lg:order-last">
           <CardPicker
             selected={selectedCards}
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
             onToggle={toggleCard}
             onAddAll={() => setSelectedCards(ALL_CARD_IDS)}
             onClear={() => setSelectedCards([])}
           />
         </aside>
 
-        <div className="min-w-0 space-y-8">
+        <div className="min-w-0 space-y-4 sm:space-y-8">
           {loading || !cardsLoaded ? (
             <AnalyticsSkeleton />
           ) : selectedCards.length === 0 ? (
-            <div className="flex min-h-72 items-center justify-center border border-dashed border-slate-300 bg-slate-50 px-6">
+            <div className="flex min-h-40 items-center justify-center border border-dashed border-slate-300 bg-slate-50 px-4 sm:min-h-72 sm:px-6">
               <div className="text-center">
                 <p className="text-base font-semibold text-slate-700">
                   No cards selected
                 </p>
-                <p className="mt-2 text-base text-slate-500">
-                  Add a card from the list on the right to see it here.
+                <p className="mt-2 text-sm text-slate-500 sm:text-base">
+                  Add a card from the Cards list to see it here.
                 </p>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-3">
               {selectedCards.map((id) => (
                 <div
                   key={id}
@@ -1123,16 +1133,20 @@ export default function FrequentIncidents() {
 }
 
 /* -------------------------
-   CARD PICKER (right side)
+   CARD PICKER (right side on desktop, collapsible on phones)
 ------------------------- */
 
 function CardPicker({
   selected,
+  open,
+  onOpenChange,
   onToggle,
   onAddAll,
   onClear,
 }: {
   selected: CardId[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onToggle: (id: CardId) => void;
   onAddAll: () => void;
   onClear: () => void;
@@ -1141,16 +1155,54 @@ function CardPicker({
 
   return (
     <section className="border border-slate-300 bg-white lg:sticky lg:top-4">
-      <div className="border-b border-slate-200 px-6 py-5">
-        <h3 className="text-lg font-bold text-[#123D73]">Cards</h3>
-        <p className="mt-2 text-base text-slate-500">
-          {selected.length} of {CARD_OPTIONS.length} cards shown
-        </p>
-        <p className="mt-1 text-sm text-slate-500">
+      <div
+        className={`border-slate-200 px-4 py-4 sm:px-6 sm:py-5 lg:border-b ${
+          open ? "border-b" : ""
+        }`}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold text-[#123D73]">Cards</h3>
+            <p className="mt-0.5 text-sm text-slate-500 sm:mt-2 sm:text-base">
+              {selected.length} of {CARD_OPTIONS.length} cards shown
+            </p>
+          </div>
+
+          {/* Phone only: collapse / expand the list */}
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls="analytics-card-list"
+            onClick={() => onOpenChange(!open)}
+            className="flex shrink-0 items-center gap-2 border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 lg:hidden"
+          >
+            {open ? "Hide" : "Show"}
+            <svg
+              className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${
+                open ? "rotate-180" : ""
+              }`}
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.22 7.22a.75.75 0 011.06 0L10 10.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 8.28a.75.75 0 010-1.06z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <p className="mt-1 hidden text-sm text-slate-500 sm:block">
           Cards appear in the order you add them.
         </p>
 
-        <div className="mt-4 flex gap-2">
+        <div
+          className={`${
+            open ? "flex" : "hidden"
+          } mt-3 gap-2 lg:mt-4 lg:flex`}
+        >
           <button
             type="button"
             onClick={onAddAll}
@@ -1171,41 +1223,46 @@ function CardPicker({
         </div>
       </div>
 
-      <div className="divide-y divide-slate-200">
+      <div
+        id="analytics-card-list"
+        className={`${
+          open ? "block" : "hidden"
+        } divide-y divide-slate-200 lg:block`}
+      >
         {groups.map((group) => (
-          <div key={group} className="px-6 py-5">
+          <div key={group} className="px-4 py-4 sm:px-6 sm:py-5">
             <p className="text-sm font-semibold text-slate-500">
               {GROUP_LABELS[group]}
             </p>
 
-            <ul className="mt-3 space-y-2">
+            <ul className="mt-2 grid grid-cols-2 gap-2 sm:mt-3 lg:grid-cols-1">
               {CARD_OPTIONS.filter((option) => option.group === group).map(
                 (option) => {
                   const added = selected.includes(option.id);
 
                   return (
-                    <li key={option.id}>
+                    <li key={option.id} className="min-w-0">
                       <button
                         type="button"
                         aria-pressed={added}
                         onClick={() => onToggle(option.id)}
-                        className={`flex w-full items-center justify-between gap-3 border px-3 py-2.5 text-left transition-colors ${
+                        className={`flex h-full w-full flex-col items-start justify-between gap-1 border px-3 py-2 text-left transition-colors sm:py-2.5 lg:flex-row lg:items-center lg:gap-3 ${
                           added
                             ? "border-[#123D73] bg-blue-50"
                             : "border-slate-300 bg-white hover:bg-slate-50"
                         }`}
                       >
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold text-slate-800">
+                          <span className="block text-sm font-semibold leading-snug text-slate-800 lg:truncate">
                             {option.label}
                           </span>
-                          <span className="mt-0.5 block text-sm text-slate-500">
+                          <span className="mt-0.5 hidden text-sm text-slate-500 sm:block">
                             {option.description}
                           </span>
                         </span>
 
                         <span
-                          className={`shrink-0 text-sm font-semibold ${
+                          className={`shrink-0 text-xs font-semibold sm:text-sm ${
                             added ? "text-[#123D73]" : "text-slate-600"
                           }`}
                         >
@@ -1236,13 +1293,14 @@ function RemoveButton({
       type="button"
       onClick={onClick}
       aria-label={`Remove ${label} card`}
-      className="shrink-0 border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+      className="shrink-0 border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-600 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700 sm:px-3 sm:py-1 sm:text-sm"
     >
       Remove
     </button>
   );
 }
 
+// Dragging only works with a mouse, so the handle is hidden on phones.
 function DragHandle({
   onDragStart,
   onDragEnd,
@@ -1257,7 +1315,7 @@ function DragHandle({
       onDragEnd={onDragEnd}
       title="Drag to reorder"
       aria-hidden="true"
-      className="shrink-0 cursor-grab select-none border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 active:cursor-grabbing"
+      className="hidden shrink-0 cursor-grab select-none border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 active:cursor-grabbing sm:inline-block"
     >
       Drag
     </span>
@@ -1282,7 +1340,7 @@ function StatCard({
   onRemove: () => void;
 }) {
   return (
-    <div className="relative flex h-full min-h-52 min-w-0 flex-col border border-slate-300 bg-white p-6 sm:p-7">
+    <div className="relative flex h-full min-h-40 min-w-0 flex-col border border-slate-300 bg-white p-3 sm:min-h-52 sm:p-7">
       {/* Top accent bar */}
       <div className={`absolute inset-x-0 top-0 h-0.5 ${accent}`} />
 
@@ -1292,16 +1350,18 @@ function StatCard({
       </div>
 
       {/* Room for a two-line label so values line up across cards */}
-      <p className="mt-3 min-h-10 text-sm font-semibold text-slate-500">
+      <p className="mt-2 min-h-8 text-xs font-semibold leading-snug text-slate-500 sm:mt-3 sm:min-h-10 sm:text-sm">
         {label}
       </p>
 
-      <p className="mt-1 wrap-break-word text-3xl font-semibold text-[#123D73]">
+      <p className="mt-1 wrap-break-word text-xl font-semibold leading-tight text-[#123D73] sm:text-3xl">
         {value}
       </p>
 
       {/* Pinned to the bottom so every card ends at the same place */}
-      <p className="mt-auto pt-3 text-base text-slate-500">{detail}</p>
+      <p className="mt-auto pt-2 text-sm text-slate-500 sm:pt-3 sm:text-base">
+        {detail}
+      </p>
     </div>
   );
 }
@@ -1321,10 +1381,12 @@ function Panel({
 }) {
   return (
     <section className="min-w-0 border border-slate-300 bg-white">
-      <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5 sm:px-8">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:gap-4 sm:px-8 sm:py-5">
         <div className="min-w-0">
           <h3 className="text-lg font-bold text-[#123D73]">{title}</h3>
-          <p className="mt-2 text-base text-slate-500">{description}</p>
+          <p className="mt-1 text-sm text-slate-500 sm:mt-2 sm:text-base">
+            {description}
+          </p>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -1333,15 +1395,15 @@ function Panel({
         </div>
       </div>
 
-      <div className="p-6 sm:p-8">{children}</div>
+      <div className="p-4 sm:p-8">{children}</div>
     </section>
   );
 }
 
 function EmptyNote({ text }: { text: string }) {
   return (
-    <div className="flex h-48 items-center justify-center">
-      <p className="text-base text-slate-500">{text}</p>
+    <div className="flex h-32 items-center justify-center text-center sm:h-48">
+      <p className="text-sm text-slate-500 sm:text-base">{text}</p>
     </div>
   );
 }
@@ -1353,26 +1415,26 @@ function EmptyNote({ text }: { text: string }) {
 function AnalyticsSkeleton() {
   return (
     <div
-      className="space-y-8"
+      className="space-y-4 sm:space-y-8"
       role="status"
       aria-label="Loading analytics"
     >
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="border border-slate-300 bg-white p-6 sm:p-7">
+          <div key={i} className="border border-slate-300 bg-white p-3 sm:p-7">
             <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="mt-4 h-9 w-3/4" />
+            <Skeleton className="mt-3 h-8 w-3/4 sm:mt-4 sm:h-9" />
             <Skeleton className="mt-3 h-4 w-1/3" />
           </div>
         ))}
       </div>
 
       <div className="border border-slate-300 bg-white">
-        <div className="border-b border-slate-200 px-6 py-5 sm:px-8">
+        <div className="border-b border-slate-200 px-4 py-4 sm:px-8 sm:py-5">
           <Skeleton className="h-6 w-1/3" />
           <Skeleton className="mt-3 h-4 w-1/2" />
         </div>
-        <div className="space-y-6 p-6 sm:p-8">
+        <div className="space-y-5 p-4 sm:space-y-6 sm:p-8">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i}>
               <Skeleton className="h-4 w-1/2" />
@@ -1463,11 +1525,11 @@ function Pagination({
   const to = Math.min(page * pageSize, total);
 
   const btn =
-    "border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
+    "border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4";
 
   return (
-    <div className="flex flex-col gap-3 border-t border-slate-300 bg-slate-50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-      <p className="text-sm text-slate-600">
+    <div className="flex flex-col gap-2 border-t border-slate-300 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-8 sm:py-4">
+      <p className="text-center text-sm text-slate-600 sm:text-left">
         Showing{" "}
         <span className="font-semibold text-slate-900">
           {from}–{to}
@@ -1475,7 +1537,7 @@ function Pagination({
         of <span className="font-semibold text-slate-900">{total}</span>
       </p>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 sm:justify-end">
         <button
           type="button"
           disabled={page <= 1}
@@ -1485,7 +1547,7 @@ function Pagination({
           Previous
         </button>
 
-        <span className="px-3 text-sm font-semibold text-slate-700">
+        <span className="px-1 text-sm font-semibold text-slate-700 sm:px-3">
           Page {page} of {totalPages}
         </span>
 
