@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // User Management sends this event whenever it loads, so the badge updates
 // right after an approve or reject without waiting for the next check.
@@ -176,6 +176,9 @@ export default function Sidebar({
   // Accounts waiting for approval (super admin only)
   const [usersPending, setUsersPending] = useState(0);
 
+  // The scrolling strip, so the active tab can be brought into view
+  const scrollRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (userRole !== "super_admin") return;
 
@@ -229,6 +232,24 @@ export default function Sidebar({
     };
   }, [userRole]);
 
+  // When the section changes (also when another page switches it, e.g.
+  // "Create Report" from Customer Reports), scroll the strip sideways so the
+  // active tab is visible. Only moves the strip, never the page.
+  useEffect(() => {
+    const strip = scrollRef.current;
+    const active = strip?.querySelector<HTMLElement>('[aria-current="page"]');
+
+    if (!strip || !active) return;
+
+    // Nothing to scroll when everything already fits (desktop)
+    if (strip.scrollWidth <= strip.clientWidth) return;
+
+    const target =
+      active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
+
+    strip.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+  }, [activeSection]);
+
   const visibleMenuItems = menuItems.filter((item) => {
     if (item.superAdminOnly) {
       return userRole === "super_admin";
@@ -239,51 +260,64 @@ export default function Sidebar({
 
   return (
     <nav className="w-full border-b border-slate-200 bg-white">
-      <div className="mx-auto flex w-full max-w-[1600px] items-center justify-center gap-1 overflow-x-auto px-4 sm:px-6 lg:px-8">
-        {visibleMenuItems.map((item) => {
-          const isActive = activeSection === item.id;
+      {/* The strip that scrolls sideways when the tabs do not fit
+          (phones and iPad portrait). Scrollbar is hidden. */}
+      <div
+        ref={scrollRef}
+        className="mx-auto w-full max-w-[1600px] overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
+      >
+        {/* w-max + min-w-full:
+            - when everything fits, the tabs are centered
+            - when it does not fit, the row grows past the screen and can be
+              scrolled from the very first tab (no more cut-off on the left).
+            (justify-center directly on the scrolling element cuts off the
+            left side and cannot be scrolled back, that was the bug.) */}
+        <div className="flex w-max min-w-full items-center justify-center gap-1 px-4 sm:px-6 lg:px-8">
+          {visibleMenuItems.map((item) => {
+            const isActive = activeSection === item.id;
 
-          const badge =
-            item.id === "customer-reports"
-              ? customerReportsPending
-              : item.id === "users"
-                ? usersPending
-                : 0;
+            const badge =
+              item.id === "customer-reports"
+                ? customerReportsPending
+                : item.id === "users"
+                  ? usersPending
+                  : 0;
 
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setActiveSection(item.id)}
-              aria-current={isActive ? "page" : undefined}
-              aria-label={
-                badge > 0
-                  ? `${item.label}, ${badge} pending`
-                  : undefined
-              }
-              className={`
-                relative flex shrink-0 items-center justify-center
-                gap-2 border-b-[3px] px-3 py-4 text-sm
-                transition-colors duration-300 ease-in-out
-                sm:px-4
-                ${
-                  isActive
-                    ? "border-[#123D73] bg-slate-50 font-bold text-[#123D73]"
-                    : "border-transparent font-medium text-slate-600 hover:bg-slate-50 hover:font-bold hover:text-[#123D73]"
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveSection(item.id)}
+                aria-current={isActive ? "page" : undefined}
+                aria-label={
+                  badge > 0
+                    ? `${item.label}, ${badge} pending`
+                    : undefined
                 }
-              `}
-            >
-              <span className="shrink-0">{item.icon}</span>
-              <span>{item.label}</span>
+                className={`
+                  relative flex shrink-0 items-center justify-center
+                  gap-2 whitespace-nowrap border-b-[3px] px-3 py-4 text-sm
+                  transition-colors duration-300 ease-in-out
+                  sm:px-4
+                  ${
+                    isActive
+                      ? "border-[#123D73] bg-slate-50 font-bold text-[#123D73]"
+                      : "border-transparent font-medium text-slate-600 hover:bg-slate-50 hover:font-bold hover:text-[#123D73]"
+                  }
+                `}
+              >
+                <span className="shrink-0">{item.icon}</span>
+                <span>{item.label}</span>
 
-              {badge > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center bg-red-600 px-1.5 text-xs font-bold text-white">
-                  {badge > 99 ? "99+" : badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+                {badge > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center bg-red-600 px-1.5 text-xs font-bold text-white">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );

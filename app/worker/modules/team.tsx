@@ -123,6 +123,8 @@ export default function Team({ onOpenAssignments }: TeamProps) {
   });
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  // Shown when the members list could not be loaded (for example RLS).
+  const [membersError, setMembersError] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -167,11 +169,14 @@ export default function Team({ onOpenAssignments }: TeamProps) {
               .eq("id", profile.team_id)
               .single(),
 
+            // Everyone assigned to this team by the admin,
+            // including the person who is logged in.
             supabase
               .from("profiles")
               .select("id, full_name")
               .eq("team_id", profile.team_id)
               .eq("role", "field_worker")
+              .eq("status", "approved") // adjust if your column name is different
               .order("full_name", { ascending: true }),
 
             supabase
@@ -189,12 +194,17 @@ export default function Team({ onOpenAssignments }: TeamProps) {
           teamResult.error || !teamResult.data
             ? {
                 id: profile.team_id,
-                name: profile.full_name ?? "Field Team",
+                name: "Field Team",
               }
             : (teamResult.data as TeamInfo)
         );
 
-        if (!memberResult.error) {
+        if (memberResult.error) {
+          console.error("Unable to load team members:", memberResult.error);
+          setMembersError(
+            "Unable to load the team members right now."
+          );
+        } else {
           setMembers((memberResult.data ?? []) as Member[]);
         }
 
@@ -240,11 +250,12 @@ export default function Team({ onOpenAssignments }: TeamProps) {
     };
   }, []);
 
-  // The team's own login account is the "device"; other
-  // field-worker profiles on the same team are listed as members.
-  const otherMembers = members.filter(
-    (member) => member.id !== currentUserId
-  );
+  // The account owner (you) comes first, then the rest alphabetically.
+  const teamMembers = [...members].sort((a, b) => {
+    if (a.id === currentUserId) return -1;
+    if (b.id === currentUserId) return 1;
+    return (a.full_name ?? "").localeCompare(b.full_name ?? "");
+  });
 
   const teamName = team?.name ?? "Team";
 
@@ -364,10 +375,10 @@ export default function Team({ onOpenAssignments }: TeamProps) {
             </div>
           </Panel>
 
-          {/* DEVICE */}
+          {/* YOUR ACCOUNT */}
           <Panel
-            title="Team Device"
-            description="The device used by your team"
+            title="Your Account"
+            description="The account you are signed in with"
           >
             <div className="flex items-center gap-5 p-4 sm:p-8">
 
@@ -382,8 +393,8 @@ export default function Team({ onOpenAssignments }: TeamProps) {
                   strokeLinejoin="round"
                   className="h-8 w-8"
                 >
-                  <rect x="7" y="2" width="10" height="20" rx="1" />
-                  <path d="M11 18h2" />
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
                 </svg>
               </div>
 
@@ -395,12 +406,12 @@ export default function Team({ onOpenAssignments }: TeamProps) {
                   </>
                 ) : (
                   <>
-                    <p className="text-base font-bold text-slate-900">
-                      {accountName || teamName}
+                    <p className="truncate text-base font-bold text-slate-900">
+                      {accountName || "Unnamed member"}
                     </p>
 
                     <p className="mt-1 text-sm leading-6 text-slate-600">
-                      This account is assigned to {teamName}.
+                      Assigned to {teamName}.
                     </p>
                   </>
                 )}
@@ -445,12 +456,14 @@ export default function Team({ onOpenAssignments }: TeamProps) {
         {/* MEMBERS */}
         <Panel
           title="Team Members"
-          description="Field worker accounts assigned to this team"
+          description={`Everyone assigned to ${
+            loading ? "this team" : teamName
+          } by the admin`}
           rightLabel={
             loading
               ? "Loading..."
-              : `${otherMembers.length} ${
-                  otherMembers.length === 1 ? "member" : "members"
+              : `${teamMembers.length} ${
+                  teamMembers.length === 1 ? "member" : "members"
                 }`
           }
         >
@@ -460,20 +473,31 @@ export default function Team({ onOpenAssignments }: TeamProps) {
               <MemberCardSkeleton />
               <MemberCardSkeleton />
             </div>
-          ) : otherMembers.length === 0 ? (
+          ) : membersError ? (
+            <div role="alert" className="px-4 py-10 text-center">
+              <p className="text-base font-bold text-red-800">
+                Unable to load members
+              </p>
+
+              <p className="mt-1.5 text-sm leading-6 text-red-700">
+                {membersError}
+              </p>
+            </div>
+          ) : teamMembers.length === 0 ? (
             <div className="px-4 py-10 text-center">
               <p className="text-base font-bold text-slate-800">
-                No other members listed
+                No members yet
               </p>
 
               <p className="mt-1.5 text-sm leading-6 text-slate-600">
-                This team currently uses a single shared account.
+                No accounts have been assigned to this team.
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 p-4 sm:p-6 md:grid-cols-2 xl:grid-cols-3">
-              {otherMembers.map((member) => {
+              {teamMembers.map((member) => {
                 const name = member.full_name ?? "Unnamed member";
+                const isCurrent = member.id === currentUserId;
 
                 return (
                   <div
@@ -491,13 +515,21 @@ export default function Team({ onOpenAssignments }: TeamProps) {
                     </div>
 
                     <div className="min-w-0">
-                      <p className="text-base font-bold text-slate-900">
+                      <p className="truncate text-base font-bold text-slate-900">
                         {name}
                       </p>
 
-                      <p className="mt-0.5 text-sm text-slate-600">
-                        Field Worker
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span className="text-sm text-slate-600">
+                          Field Worker
+                        </span>
+
+                        {isCurrent && (
+                          <span className="border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-800">
+                            You
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
