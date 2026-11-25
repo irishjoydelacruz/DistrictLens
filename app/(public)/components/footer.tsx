@@ -23,6 +23,8 @@ const titleClass =
   "text-xs font-bold uppercase tracking-[0.12em] text-white"
 const linkClass =
   "flex items-center gap-2.5 border border-transparent px-2.5 py-2 text-sm text-blue-100 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+const legalLinkClass =
+  "transition-colors hover:text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
 
 export function Footer() {
   const pathname = usePathname()
@@ -165,10 +167,19 @@ export function Footer() {
       </div>
 
       <div className="border-t border-white/15 bg-[#0D2F59]">
-        <div className="mx-auto max-w-[1600px] px-4 py-4 text-xs text-blue-200 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-4 text-xs text-blue-200 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <span>
             © 2026 SerbisyON DistrictLens <span aria-hidden="true">·</span> Academic Software Engineering Project
           </span>
+
+          <nav aria-label="Legal" className="flex items-center gap-4">
+            <Link href="/privacy-policy" className={legalLinkClass}>
+              Privacy Policy
+            </Link>
+            <Link href="/terms-and-conditions" className={legalLinkClass}>
+              Terms and Conditions
+            </Link>
+          </nav>
         </div>
       </div>
     </footer>
