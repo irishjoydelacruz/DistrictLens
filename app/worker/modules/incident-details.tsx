@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
+import { logActivity } from "@/lib/activity-log";
 // =========================
 // SKELETON LOADING
 // (square corners and slate colors, same as the admin Dashboard)
@@ -677,6 +678,16 @@ export default function IncidentDetails({
         deployment.id,
         newStatus
       );
+
+      await logActivity({
+        action:
+          newStatus === "ongoing" ? "assignment.start" : "assignment.resolve",
+        entityType: "assignment",
+        entityId: deployment.id,
+        details: `${
+          newStatus === "ongoing" ? "started" : "resolved"
+        } the task for INC-${String(deployment.incident_id).padStart(4, "0")}.`,
+      });
 
       // =========================
       // RESOLVED = INCIDENT NORMAL

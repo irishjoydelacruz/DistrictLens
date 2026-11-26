@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import { logActivity } from "@/lib/activity-log";
 
 import Authentication from "./authentication";
 
@@ -138,6 +139,13 @@ function WorkerHeader({
 
   async function handleLogout() {
     const supabase = createClient();
+
+    // Log first: after signOut there is no session, so RLS would block it.
+    await logActivity({
+      action: "auth.logout",
+      details: "logged out.",
+    });
+
     const { error } = await supabase.auth.signOut();
 
     if (error) {

@@ -9,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
+import { logActivity } from "@/lib/activity-log";
 
 type Incident = {
   id: number;
@@ -863,6 +864,18 @@ export default function Submissions() {
       setSaving(false);
       return;
     }
+
+    const statusNote =
+      selectedIncident.status !== editForm.status
+        ? ` Status changed from ${getStatusLabel(selectedIncident.status)} to ${getStatusLabel(editForm.status)}.`
+        : "";
+
+    await logActivity({
+      action: "report.update",
+      entityType: "incident",
+      entityId: incidentId,
+      details: `updated incident report INC-${String(incidentId).padStart(4, "0")}.${statusNote}`,
+    });
 
     const desiredCodes = isStationIncident
       ? [...new Set(editForm.affected_barangay_codes)]

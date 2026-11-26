@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { logActivity } from "@/lib/activity-log";
 
 type ReportStatus = "pending" | "verified" | "rejected";
 
@@ -262,6 +263,15 @@ export default function CustomerReports({
         setNotice(
           `Report ${report.tracking_number} was marked as ${status}.`
         );
+        await logActivity({
+          action:
+            status === "verified"
+              ? "customer_report.verify"
+              : "customer_report.reject",
+          entityType: "customer_report",
+          entityId: report.tracking_number,
+          details: `${status === "verified" ? "verified" : "rejected"} customer report ${report.tracking_number}.`,
+        });
       }
 
       setDialog(null);
@@ -329,6 +339,14 @@ export default function CustomerReports({
             ? `Report ${report.tracking_number} was marked as a duplicate.`
             : `Report ${report.tracking_number} was kept as a separate incident.`
         );
+        await logActivity({
+          action: same ? "customer_report.reject" : "customer_report.review",
+          entityType: "customer_report",
+          entityId: report.tracking_number,
+          details: same
+            ? `marked customer report ${report.tracking_number} as a duplicate.`
+            : `kept customer report ${report.tracking_number} as a separate incident.`,
+        });
       }
 
       await load();

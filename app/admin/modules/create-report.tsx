@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
+import { logActivity } from "@/lib/activity-log";
 import type { CustomerReportPrefill } from "./customer-reports";
 
 type Barangay = {
@@ -1630,6 +1631,13 @@ export default function CreateReport({
 
           incidentId = incident.id as number;
           progress.set(draft.id, { savedIncidentId: incidentId });
+
+          await logActivity({
+            action: "report.create",
+            entityType: "incident",
+            entityId: incidentId,
+            details: `created incident report INC-${String(incidentId).padStart(4, "0")} (${draft.incidentType}).`,
+          });
         }
 
         /* LINK BACK TO THE CUSTOMER REPORT */
@@ -1678,6 +1686,13 @@ export default function CreateReport({
             throw new Error(
               `${label}: Incident was created, but team deployment failed: ${error.message}`
             );
+
+          await logActivity({
+            action: "assignment.create",
+            entityType: "assignment",
+            entityId: incidentId,
+            details: `assigned ${teams.find((t) => t.id === draft.teamId)?.name ?? "a team"} to INC-${String(incidentId).padStart(4, "0")}.`,
+          });
         }
 
         finished.add(draft.id);

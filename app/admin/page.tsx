@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import { logActivity } from "@/lib/activity-log";
 
 import Sidebar from "./modules/sidebar";
 import Dashboard from "./modules/dashboard";
@@ -14,6 +15,7 @@ import CustomerReports, {
 import FrequentIncidents from "./modules/frequent-incidents";
 import Deployment from "./modules/deployment";
 import UserManagement from "./modules/user-management";
+import ActivityLog from "./modules/activity-log";
 import BackToTop from "@/app/(public)/components/back-to-top";
 
 export default function AdminPage() {
@@ -93,7 +95,9 @@ export default function AdminPage() {
 
           if (profile.role !== "super_admin") {
             setActiveSection((current) =>
-              current === "users" ? "dashboard" : current
+              current === "users" || current === "activity-log"
+                ? "dashboard"
+                : current
             );
           }
         }
@@ -162,7 +166,10 @@ export default function AdminPage() {
   /* SECTION CHANGE */
 
   function handleSectionChange(section: string) {
-    if (section === "users" && userRoleKey !== "super_admin") {
+    if (
+      (section === "users" || section === "activity-log") &&
+      userRoleKey !== "super_admin"
+    ) {
       return;
     }
 
@@ -174,6 +181,13 @@ export default function AdminPage() {
 
   async function handleLogout() {
     const supabase = createClient();
+
+    // Log first: after signOut there is no session, so RLS would block it.
+    await logActivity({
+      action: "auth.logout",
+      details: "logged out.",
+    });
+
     const { error } = await supabase.auth.signOut();
 
     if (error) {
@@ -374,6 +388,9 @@ export default function AdminPage() {
         {activeSection === "users" &&
           userRoleKey === "super_admin" && <UserManagement />}
 
+        {activeSection === "activity-log" &&
+          userRoleKey === "super_admin" && <ActivityLog />}
+
         {/* UNAVAILABLE SECTION FALLBACK */}
 
         {![
@@ -384,6 +401,7 @@ export default function AdminPage() {
           "assignments",
           "analytics",
           "users",
+          "activity-log",
         ].includes(activeSection) && (
           <section className="border border-slate-200 bg-white p-6">
             <h3 className="text-lg font-semibold text-[#123D73]">

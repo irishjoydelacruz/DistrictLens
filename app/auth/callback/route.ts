@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 
   const { data: profile } = await adminSupabase
     .from("profiles")
-    .select("role, status, must_change_password")
+    .select("full_name, role, status, must_change_password, team:teams(name)")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -65,6 +65,36 @@ export async function GET(request: Request) {
         profile.status === "rejected" ? "rejected" : "pending"
       }`
     );
+  }
+
+  // Record the successful Google login (before any redirect).
+  // Uses the admin client so it works on the server. A failure here
+  // must never block the sign-in.
+  try {
+    const team = profile.team as
+      | { name?: string }
+      | { name?: string }[]
+      | null;
+    const teamName = Array.isArray(team) ? team[0]?.name : team?.name;
+
+    const { error: logError } = await adminSupabase
+      .from("activity_logs")
+      .insert({
+        user_id: user.id,
+        actor_name: profile.full_name ?? user.email,
+        actor_role: profile.role ?? null,
+        actor_team: teamName ?? null,
+        action: "auth.login",
+        entity_type: "user",
+        entity_id: user.id,
+        details: "logged in.",
+      });
+
+    if (logError) {
+      console.error("AUTH CALLBACK: activity log failed:", logError.message);
+    }
+  } catch (logError) {
+    console.error("AUTH CALLBACK: activity log failed:", logError);
   }
 
   if (profile.must_change_password === true) {

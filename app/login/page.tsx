@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { logActivity } from "@/lib/activity-log";
 
 const DISTRICTLENS_LOGO = "/images/districtlenslogo.png";
 
@@ -93,6 +94,18 @@ function LoginForm() {
         );
         return;
       }
+
+      // Record the successful login (before any redirect, so it is not cut off)
+      const {
+        data: { user: signedInUser },
+      } = await supabase.auth.getUser();
+
+      await logActivity({
+        action: "auth.login",
+        entityType: "user",
+        entityId: signedInUser?.id ?? email,
+        details: "logged in.",
+      });
 
       // Step 3: Temporary password: change it first
       if (result.mustChangePassword === true) {
