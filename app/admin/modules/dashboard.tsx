@@ -309,7 +309,7 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
     pumpingStationCounts[0]?.count || 0;
 
   return (
-    <div className="space-y-8 border border-[#4438A8] bg-white p-6 text-slate-900 sm:p-8">
+    <div className="space-y-5 border border-[#4438A8] bg-white p-3 text-slate-900 sm:space-y-8 sm:p-8">
       <style>{`
         @keyframes dash-ping {
           0% { opacity: 0.65; transform: scale(1); }
@@ -328,40 +328,42 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
         }
       `}</style>
 
-      {/* WELCOME BANNER */}
-      <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-6 sm:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-          {/* Left: Welcome Text */}
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-indigo-100">
+      {/* WELCOME BANNER
+          Phone: title on top, then the location/date on the left and the
+          two logos right beside it.
+          sm and up: text on the left, bigger logos on the right. */}
+      <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-4 py-5 sm:px-8 sm:py-6">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-4 sm:gap-x-6 sm:gap-y-0">
+          {/* Title */}
+          <div className="col-span-2 row-start-1 min-w-0 sm:col-span-1">
+            <p className="text-xs font-bold text-indigo-100 sm:text-sm">
               Tanza Water District
             </p>
 
-            <h2 className="mt-2 text-2xl font-bold text-white">
+            <h2 className="mt-1.5 text-xl font-bold text-white sm:mt-2 sm:text-2xl">
               Welcome to DistrictLens
             </h2>
 
-            <p className="mt-2 text-base text-indigo-100">
+            <p className="mt-1.5 text-sm text-indigo-100 sm:mt-2 sm:text-base">
               Incident Monitoring and Operations Dashboard
             </p>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-indigo-100">
-              <span>Tanza, Cavite</span>
-              <span className="text-indigo-300">|</span>
-              <time>
-                {new Date().toLocaleDateString("en-PH", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </time>
-            </div>
           </div>
 
-          {/* Right: Official Logos
-              Phone: small, side by side, right under "Tanza, Cavite | date".
-              sm and up: bigger, on the right side of the banner. */}
-          <div className="flex shrink-0 items-center justify-start gap-3 sm:ml-auto sm:mr-8 sm:justify-center sm:gap-5 lg:mr-16">
+          {/* Location and date */}
+          <div className="col-start-1 row-start-2 flex min-w-0 flex-col gap-0.5 text-sm text-indigo-100 sm:mt-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <span>Tanza, Cavite</span>
+            <span className="hidden text-indigo-300 sm:inline">|</span>
+            <time>
+              {new Date().toLocaleDateString("en-PH", {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </time>
+          </div>
+
+          {/* Official logos */}
+          <div className="col-start-2 row-start-2 flex shrink-0 items-center justify-end gap-2 sm:row-span-2 sm:row-start-1 sm:ml-auto sm:mr-8 sm:justify-center sm:gap-5 lg:mr-16">
             {/* Municipality of Tanza Logo */}
             <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white p-1.5 shadow-md sm:h-24 sm:w-24 sm:p-2 lg:h-28 lg:w-28">
               <img
@@ -388,8 +390,8 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
         <DashboardSkeleton />
       ) : (
         <>
-          {/* SUMMARY CARDS */}
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+          {/* SUMMARY CARDS: 2 x 2 on phones, one row on wide screens */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
             <SummaryCard
               label="Active Incidents"
               value={activeCount}
@@ -421,7 +423,7 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
           </div>
 
           {/* ANALYTICS */}
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 sm:gap-8 lg:grid-cols-2">
             <Panel
               title="Incident Analytics"
               description="Distribution by incident type"
@@ -482,7 +484,7 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
               ) : (
                 <div className="flex min-w-0 flex-1 flex-col">
                   {/* Ranked list — bar length is relative to the top barangay */}
-                  <ol className="flex flex-1 flex-col justify-between gap-6">
+                  <ol className="flex flex-1 flex-col justify-between gap-5 sm:gap-6">
                     {barangayCounts.map((item, index) => {
                       const maxCount = barangayCounts[0]?.count || 1;
 
@@ -493,10 +495,10 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
 
                       return (
                         <li key={item.code} className="min-w-0">
-                          <div className="flex min-w-0 items-center gap-4">
+                          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                             {/* Rank */}
                             <span
-                              className={`flex h-9 w-9 shrink-0 items-center justify-center text-sm font-bold ${
+                              className={`flex h-8 w-8 shrink-0 items-center justify-center text-sm font-bold sm:h-9 sm:w-9 ${
                                 index === 0
                                   ? "bg-[#123D73] text-white"
                                   : "bg-slate-100 text-slate-500"
@@ -506,10 +508,13 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
                             </span>
 
                             <div className="min-w-0 flex-1">
-                              <div className="flex min-w-0 items-center justify-between gap-4">
+                              {/* Phone: the full barangay name on its own line,
+                                  then the status and the count below it.
+                                  sm and up: everything on one row. */}
+                              <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                                 <p
                                   title={item.name}
-                                  className={`truncate text-base font-semibold ${
+                                  className={`wrap-break-word text-base font-semibold leading-5 sm:truncate ${
                                     index === 0
                                       ? "text-[#123D73]"
                                       : "text-slate-800"
@@ -518,23 +523,23 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
                                   {item.name}
                                 </p>
 
-                                <div className="flex shrink-0 items-center gap-3">
+                                <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
                                   <span
-                                    className={`inline-flex w-24 items-center justify-center border px-2 py-1 text-xs font-semibold ${statusBadge(
+                                    className={`inline-flex items-center justify-center border px-2 py-1 text-xs font-semibold sm:w-24 ${statusBadge(
                                       item.status
                                     )}`}
                                   >
                                     {statusLabel(item.status)}
                                   </span>
 
-                                  <span className="w-10 text-right text-base font-bold text-[#123D73]">
+                                  <span className="text-right text-base font-bold text-[#123D73] sm:w-10">
                                     <CountUp value={item.count} />
                                   </span>
                                 </div>
                               </div>
 
                               {/* Animated bar */}
-                              <div className="mt-2.5 h-3 w-full bg-slate-100">
+                              <div className="mt-2 h-2.5 w-full bg-slate-100 sm:mt-2.5 sm:h-3">
                                 <div
                                   className="brgy-bar h-full"
                                   style={
@@ -554,7 +559,7 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
                     })}
                   </ol>
 
-                  <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-slate-200 pt-5 text-sm font-medium text-slate-600">
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-slate-200 pt-4 text-sm font-medium text-slate-600 sm:mt-8 sm:pt-5">
                     <StatusLegend color="bg-red-500" label="Active" />
                     <StatusLegend color="bg-amber-400" label="Monitoring" />
                     <StatusLegend color="bg-emerald-500" label="Resolved" />
@@ -658,7 +663,7 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
                       <div
                         key={incident.id}
                         role="row"
-                        className={`grid grid-cols-1 gap-2 px-6 py-5 transition-colors duration-200 hover:bg-slate-50 sm:px-8 lg:items-center lg:gap-6 xl:gap-8 lg:py-4 ${reportGridCols}`}
+                        className={`grid grid-cols-1 gap-2 px-4 py-4 transition-colors duration-200 hover:bg-slate-50 sm:px-8 sm:py-5 lg:items-center lg:gap-6 xl:gap-8 lg:py-4 ${reportGridCols}`}
                       >
                         <span
                           role="cell"
@@ -827,8 +832,8 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
                   </button>
                 )}
 
-                <div className="pointer-events-none absolute bottom-5 left-5 z-400 max-w-[calc(100%-2.5rem)] border border-slate-300 bg-white/95 px-4 py-3.5">
-                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                <div className="pointer-events-none absolute bottom-3 left-3 z-400 max-w-[calc(100%-1.5rem)] border border-slate-300 bg-white/95 px-3 py-3 sm:bottom-5 sm:left-5 sm:max-w-[calc(100%-2.5rem)] sm:px-4 sm:py-3.5">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 sm:mb-3">
                     Incident Status
                   </p>
 
@@ -866,7 +871,7 @@ function Panel({
 }) {
   return (
     <section className="flex h-full min-w-0 flex-col overflow-hidden border border-slate-300 bg-white">
-      <div className="flex min-w-0 flex-col gap-4 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+      <div className="flex min-w-0 flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-8 sm:py-5">
         <div className="min-w-0">
           <h3 className="text-lg font-bold text-[#123D73]">{title}</h3>
           <p className="mt-1.5 text-sm text-slate-500">{description}</p>
@@ -895,7 +900,7 @@ function Panel({
 
       <div
         className={`flex min-w-0 flex-1 flex-col ${
-          flush ? "" : "p-6 sm:p-8"
+          flush ? "" : "p-4 sm:p-8"
         }`}
       >
         {children}
@@ -922,12 +927,12 @@ function InsightCard({
   detail: React.ReactNode;
 }) {
   return (
-    <div className="min-w-0 bg-white p-6 sm:p-7">
+    <div className="min-w-0 bg-white p-5 sm:p-7">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         {label}
       </p>
 
-      <p className="mt-4 wrap-break-word text-3xl font-semibold text-[#123D73]">
+      <p className="mt-3 wrap-break-word text-2xl font-semibold text-[#123D73] sm:mt-4 sm:text-3xl">
         {value}
       </p>
 
@@ -1234,13 +1239,13 @@ function SummaryCard({
   };
 
   return (
-    <div className="relative min-w-0 border border-slate-300 bg-white p-6 sm:p-7">
+    <div className="relative min-w-0 border border-slate-300 bg-white p-4 sm:p-7">
       {/* Top accent bar */}
       <div
         className={`absolute inset-x-0 top-0 h-0.5 ${accents[color]}`}
       />
 
-      <p className="flex items-center gap-2.5 text-sm font-bold text-slate-800">
+      <p className="flex items-center gap-2 text-sm font-bold leading-5 text-slate-800 sm:gap-2.5">
         {pulse && (
           <span
             aria-hidden="true"
@@ -1253,11 +1258,13 @@ function SummaryCard({
         {label}
       </p>
 
-      <p className="mt-4 text-4xl font-bold text-slate-900">
+      <p className="mt-3 text-3xl font-bold text-slate-900 sm:mt-4 sm:text-4xl">
         <CountUp value={value} />
       </p>
 
-      <p className="mt-2 text-sm text-slate-500">{description}</p>
+      <p className="mt-1.5 text-xs leading-4 text-slate-500 sm:mt-2 sm:text-sm sm:leading-5">
+        {description}
+      </p>
     </div>
   );
 }
@@ -1285,14 +1292,14 @@ function StatusLegend({
 function DashboardSkeleton() {
   return (
     <div
-      className="space-y-8"
+      className="space-y-5 sm:space-y-8"
       role="status"
       aria-label="Loading dashboard"
     >
       {/* Summary cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="border border-slate-300 bg-white p-6 sm:p-7">
+          <div key={i} className="border border-slate-300 bg-white p-4 sm:p-7">
             <Skeleton className="h-4 w-1/2" />
             <Skeleton className="mt-4 h-10 w-1/3" />
             <Skeleton className="mt-3 h-4 w-2/3" />
@@ -1301,14 +1308,14 @@ function DashboardSkeleton() {
       </div>
 
       {/* Chart + barangays */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 sm:gap-8 lg:grid-cols-2">
         {Array.from({ length: 2 }).map((_, i) => (
           <div key={i} className="border border-slate-300 bg-white">
-            <div className="border-b border-slate-200 px-6 py-5 sm:px-8">
+            <div className="border-b border-slate-200 px-4 py-4 sm:px-8 sm:py-5">
               <Skeleton className="h-6 w-1/2" />
               <Skeleton className="mt-3 h-4 w-2/3" />
             </div>
-            <div className="p-6 sm:p-8">
+            <div className="p-4 sm:p-8">
               <Skeleton className="h-72 w-full" />
             </div>
           </div>
@@ -1318,7 +1325,7 @@ function DashboardSkeleton() {
       {/* Insights */}
       <div className="grid grid-cols-1 gap-px border border-slate-300 bg-slate-300 md:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="bg-white p-6 sm:p-7">
+          <div key={i} className="bg-white p-5 sm:p-7">
             <Skeleton className="h-3 w-1/2" />
             <Skeleton className="mt-4 h-9 w-3/4" />
             <Skeleton className="mt-3 h-4 w-1/3" />
@@ -1328,7 +1335,7 @@ function DashboardSkeleton() {
 
       {/* Recent reports */}
       <div className="border border-slate-300 bg-white">
-        <div className="border-b border-slate-200 px-6 py-5 sm:px-8">
+        <div className="border-b border-slate-200 px-4 py-4 sm:px-8 sm:py-5">
           <Skeleton className="h-6 w-1/3" />
           <Skeleton className="mt-3 h-4 w-1/2" />
         </div>
@@ -1336,7 +1343,7 @@ function DashboardSkeleton() {
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
-              className="grid grid-cols-2 items-center gap-4 px-6 py-5 sm:px-8 lg:grid-cols-6"
+              className="grid grid-cols-2 items-center gap-4 px-4 py-4 sm:px-8 sm:py-5 lg:grid-cols-6"
             >
               <Skeleton className="h-4 w-16" />
               <Skeleton className="h-4 w-4/5" />
@@ -1351,7 +1358,7 @@ function DashboardSkeleton() {
 
       {/* Map */}
       <div className="border border-slate-300 bg-white">
-        <div className="border-b border-slate-200 px-6 py-5 sm:px-8">
+        <div className="border-b border-slate-200 px-4 py-4 sm:px-8 sm:py-5">
           <Skeleton className="h-6 w-1/4" />
           <Skeleton className="mt-3 h-4 w-1/3" />
         </div>

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { logActivity } from "@/lib/activity-log";
 
 import Authentication from "./authentication";
 
@@ -12,6 +11,10 @@ import Assignments, { type Filter } from "./modules/assignments";
 import IncidentDetails from "./modules/incident-details";
 import Notifications from "./modules/notifications";
 import Team from "./modules/team";
+import {
+  useNotifications,
+  type NotificationItem,
+} from "./modules/use-notifications";
 
 /* =========================================
    NAVIGATION ITEMS
@@ -60,6 +63,32 @@ function NavIcon({
     >
       <path d={path} />
     </svg>
+  );
+}
+
+// Same red square badge as the admin sidebar.
+function Badge({
+  count,
+  small = false,
+  className = "",
+}: {
+  count: number;
+  small?: boolean;
+  className?: string;
+}) {
+  if (count <= 0) return null;
+
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex items-center justify-center bg-red-600 font-bold text-white ${
+        small
+          ? "h-4 min-w-4 px-1 text-[10px]"
+          : "h-5 min-w-5 px-1.5 text-xs"
+      } ${className}`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
 
@@ -139,13 +168,6 @@ function WorkerHeader({
 
   async function handleLogout() {
     const supabase = createClient();
-
-    // Log first: after signOut there is no session, so RLS would block it.
-    await logActivity({
-      action: "auth.logout",
-      details: "logged out.",
-    });
-
     const { error } = await supabase.auth.signOut();
 
     if (error) {
@@ -307,10 +329,12 @@ function WorkerHeader({
 }
 
 /* =========================================
-   PAGE
+   SHELL
+   Everything below the sign-in lives here, so the notifications
+   (and the badge) only load after the person is signed in.
 ========================================= */
 
-export default function WorkerPage() {
+function WorkerShell() {
   const [activeSection, setActiveSection] =
     useState("home");
 
@@ -326,6 +350,9 @@ export default function WorkerPage() {
   // "refresh your data"
   const [refreshKey, setRefreshKey] =
     useState(0);
+
+  // Notifications live here so the badge is always up to date.
+  const notifs = useNotifications(refreshKey);
 
   // Always start at the top when the section changes
   // (also runs when the same tab is tapped again,
@@ -365,174 +392,243 @@ export default function WorkerPage() {
     setRefreshKey((previous) => previous + 1);
   }
 
+  // Tapping a notification: it is marked as read (removed from the
+  // list and the badge) and Assignments opens on the matching filter.
+  function openNotification(
+    notification: NotificationItem
+  ) {
+    notifs.markRead([notification.id]);
+
+    const filter: Filter =
+      notification.type === "resolved"
+        ? "resolved"
+        : notification.type === "update"
+          ? "ongoing"
+          : "assigned";
+
+    changeSection("assignments", filter);
+  }
+
   // Incident details belongs to the Assignments tab.
   const activeTab =
     activeSection === "incident-details"
       ? "assignments"
       : activeSection;
 
+  // Badge number for each nav item (only Alerts has one).
+  function badgeFor(key: string) {
+    return key === "notifications"
+      ? notifs.unreadCount
+      : 0;
+  }
+
   return (
-    <Authentication>
-      <div className="min-h-screen w-full bg-[#F4F6F9] text-slate-800">
+    <div className="min-h-screen w-full bg-[#F4F6F9] text-slate-800">
 
-        {/* HEADER */}
-        <WorkerHeader
-          onGoHome={() => changeSection("home")}
-        />
+      {/* HEADER */}
+      <WorkerHeader
+        onGoHome={() => changeSection("home")}
+      />
 
-        {/* TOP NAVIGATION (tablet and desktop) */}
-        <nav
-          aria-label="Main navigation"
-          className="hidden border-b border-slate-200 bg-white md:block"
+      {/* TOP NAVIGATION (tablet and desktop) */}
+      <nav
+        aria-label="Main navigation"
+        className="hidden border-b border-slate-200 bg-white md:block"
+      >
+        <div className="mx-auto flex max-w-[1600px] justify-center gap-1 px-4 sm:px-6 lg:px-8">
+          {navItems.map((item) => {
+            const active = activeTab === item.key;
+            const badge = badgeFor(item.key);
+
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() =>
+                  changeSection(item.key)
+                }
+                aria-current={
+                  active ? "page" : undefined
+                }
+                aria-label={
+                  badge > 0
+                    ? `${item.label}, ${badge} new`
+                    : undefined
+                }
+                className={`flex items-center gap-2 border-b-2 px-5 py-4 text-sm font-semibold transition-colors ${
+                  active
+                    ? "border-[#123D73] text-[#123D73]"
+                    : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-[#123D73]"
+                }`}
+              >
+                <NavIcon
+                  path={item.path}
+                  className="h-5 w-5"
+                />
+
+                {item.label}
+
+                <Badge count={badge} />
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* CONTENT + FOOTER (extra space on phones for the bottom bar) */}
+      <div className="pb-20 md:pb-0">
+
+        {/* MAIN CONTENT */}
+        <main
+          id="main-content"
+          className="min-h-[calc(100vh-14rem)]"
         >
-          <div className="mx-auto flex max-w-[1600px] justify-center gap-1 px-4 sm:px-6 lg:px-8">
-            {navItems.map((item) => {
-              const active = activeTab === item.key;
 
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() =>
-                    changeSection(item.key)
-                  }
-                  aria-current={
-                    active ? "page" : undefined
-                  }
-                  className={`flex items-center gap-2 border-b-2 px-5 py-4 text-sm font-semibold transition-colors ${
-                    active
-                      ? "border-[#123D73] text-[#123D73]"
-                      : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-[#123D73]"
-                  }`}
-                >
-                  <NavIcon
-                    path={item.path}
-                    className="h-5 w-5"
-                  />
+          {/* HOME */}
+          {activeSection === "home" && (
+            <Home
+              refreshKey={refreshKey}
+              onOpenAssignments={() =>
+                changeSection("assignments")
+              }
+              onSelectAssignment={
+                openIncidentDetails
+              }
+            />
+          )}
 
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
+          {/* ASSIGNMENTS */}
+          {activeSection === "assignments" && (
+            <Assignments
+              refreshKey={refreshKey}
+              initialFilter={assignmentsFilter}
+              onSelectAssignment={
+                openIncidentDetails
+              }
+            />
+          )}
 
-        {/* CONTENT + FOOTER (extra space on phones for the bottom bar) */}
-        <div className="pb-20 md:pb-0">
+          {/* INCIDENT DETAILS */}
+          {activeSection === "incident-details" && (
+            <IncidentDetails
+              deployment={selectedDeployment}
+              onBack={backToAssignments}
+            />
+          )}
 
-          {/* MAIN CONTENT */}
-          <main
-            id="main-content"
-            className="min-h-[calc(100vh-14rem)]"
-          >
+          {/* NOTIFICATIONS */}
+          {activeSection === "notifications" && (
+            <Notifications
+              notifications={notifs.notifications}
+              readNotifications={notifs.readNotifications}
+              loading={notifs.loading}
+              refreshing={notifs.refreshing}
+              errorMessage={notifs.errorMessage}
+              onRefresh={notifs.reload}
+              onOpen={openNotification}
+              onMarkRead={notifs.markRead}
+              onMarkUnread={notifs.markUnread}
+              onDelete={notifs.deleteNotifications}
+              actionError={notifs.actionError}
+              onDismissActionError={notifs.clearActionError}
+            />
+          )}
 
-            {/* HOME */}
-            {activeSection === "home" && (
-              <Home
-                refreshKey={refreshKey}
-                onOpenAssignments={() =>
-                  changeSection("assignments")
-                }
-                onSelectAssignment={
-                  openIncidentDetails
-                }
-              />
-            )}
+          {/* TEAM */}
+          {activeSection === "team" && (
+            <Team
+              onOpenAssignments={(filter) =>
+                changeSection(
+                  "assignments",
+                  filter ?? "todo"
+                )
+              }
+            />
+          )}
 
-            {/* ASSIGNMENTS */}
-            {activeSection === "assignments" && (
-              <Assignments
-                refreshKey={refreshKey}
-                initialFilter={assignmentsFilter}
-                onSelectAssignment={
-                  openIncidentDetails
-                }
-              />
-            )}
+        </main>
 
-            {/* INCIDENT DETAILS */}
-            {activeSection === "incident-details" && (
-              <IncidentDetails
-                deployment={selectedDeployment}
-                onBack={backToAssignments}
-              />
-            )}
+        {/* FOOTER */}
+        <footer className="border-t border-slate-200 bg-white">
+          <div className="mx-auto flex max-w-[1600px] flex-col gap-2 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+            <div>
+              <p className="text-xs font-semibold text-[#123D73]">
+                DistrictLens Field Portal
+              </p>
 
-            {/* NOTIFICATIONS */}
-            {activeSection === "notifications" && (
-              <Notifications />
-            )}
-
-            {/* TEAM */}
-            {activeSection === "team" && (
-              <Team
-                onOpenAssignments={(filter) =>
-                  changeSection(
-                    "assignments",
-                    filter ?? "todo"
-                  )
-                }
-              />
-            )}
-
-          </main>
-
-          {/* FOOTER */}
-          <footer className="border-t border-slate-200 bg-white">
-            <div className="mx-auto flex max-w-[1600px] flex-col gap-2 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-              <div>
-                <p className="text-xs font-semibold text-[#123D73]">
-                  DistrictLens Field Portal
-                </p>
-
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Tanza Water District
-                </p>
-              </div>
-
-              <p className="text-[11px] text-slate-500">
-                Authorized personnel only
+              <p className="mt-1 text-[11px] text-slate-500">
+                Tanza Water District
               </p>
             </div>
-          </footer>
 
-        </div>
-
-        {/* BOTTOM NAVIGATION (phones only) */}
-        <nav
-          aria-label="Main navigation"
-          className="fixed bottom-0 left-0 right-0 z-900 border-t border-slate-200 bg-white md:hidden"
-        >
-          <div className="mx-auto flex max-w-xl justify-around">
-            {navItems.map((item) => {
-              const active = activeTab === item.key;
-
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() =>
-                    changeSection(item.key)
-                  }
-                  aria-current={
-                    active ? "page" : undefined
-                  }
-                  className={`flex min-h-16 flex-1 flex-col items-center justify-center gap-1 border-t-2 px-2 py-2 text-xs font-semibold transition-colors ${
-                    active
-                      ? "border-[#123D73] bg-blue-50 text-[#123D73]"
-                      : "border-transparent text-slate-500 hover:bg-slate-50"
-                  }`}
-                >
-                  <NavIcon path={item.path} />
-
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
+            <p className="text-[11px] text-slate-500">
+              Authorized personnel only
+            </p>
           </div>
-        </nav>
+        </footer>
 
       </div>
+
+      {/* BOTTOM NAVIGATION (phones only) */}
+      <nav
+        aria-label="Main navigation"
+        className="fixed bottom-0 left-0 right-0 z-900 border-t border-slate-200 bg-white md:hidden"
+      >
+        <div className="mx-auto flex max-w-xl justify-around">
+          {navItems.map((item) => {
+            const active = activeTab === item.key;
+            const badge = badgeFor(item.key);
+
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() =>
+                  changeSection(item.key)
+                }
+                aria-current={
+                  active ? "page" : undefined
+                }
+                aria-label={
+                  badge > 0
+                    ? `${item.label}, ${badge} new`
+                    : undefined
+                }
+                className={`flex min-h-16 flex-1 flex-col items-center justify-center gap-1 border-t-2 px-2 py-2 text-xs font-semibold transition-colors ${
+                  active
+                    ? "border-[#123D73] bg-blue-50 text-[#123D73]"
+                    : "border-transparent text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <span className="relative">
+                  <NavIcon path={item.path} />
+
+                  <Badge
+                    count={badge}
+                    small
+                    className="absolute -right-3 -top-2"
+                  />
+                </span>
+
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+    </div>
+  );
+}
+
+/* =========================================
+   PAGE
+========================================= */
+
+export default function WorkerPage() {
+  return (
+    <Authentication>
+      <WorkerShell />
     </Authentication>
   );
 }
