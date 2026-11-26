@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import { logActivity } from "@/lib/activity-log";
 
 import Authentication from "./authentication";
 
@@ -109,6 +110,14 @@ function WorkerHeader({
   const [isUserMenuOpen, setIsUserMenuOpen] =
     useState(false);
 
+  // Logout popups: confirmation first, then the success message.
+  const [logoutStep, setLogoutStep] = useState<
+    "closed" | "confirm" | "success"
+  >("closed");
+
+  const [isLoggingOut, setIsLoggingOut] =
+    useState(false);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -166,165 +175,311 @@ function WorkerHeader({
     return generated || "FW";
   }, [userName]);
 
+  /* LOGOUT SUCCESS: BACK TO SIGN-IN AFTER A MOMENT */
+
+  // Reload so <Authentication> shows the sign-in screen again.
+  useEffect(() => {
+    if (logoutStep !== "success") return;
+
+    const timer = window.setTimeout(() => {
+      window.location.reload();
+    }, 2000);
+
+    return () => window.clearTimeout(timer);
+  }, [logoutStep]);
+
+  /* LOGOUT */
+
   async function handleLogout() {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+
     const supabase = createClient();
+
+    // Log first: after signOut there is no session,
+    // so RLS would block it. A failed log must not
+    // stop the person from logging out.
+    try {
+      await logActivity({
+        action: "auth.logout",
+        details: "logged out.",
+      });
+    } catch (error) {
+      console.error("Unable to log activity:", error);
+    }
+
     const { error } = await supabase.auth.signOut();
+    setIsLoggingOut(false);
 
     if (error) {
       console.error("Logout error:", error);
+      setLogoutStep("closed");
       return;
     }
 
-    // Reload so <Authentication> shows the sign-in screen again.
-    window.location.reload();
+    setLogoutStep("success");
   }
 
   return (
-    <header className="sticky top-0 z-1000 border-b border-slate-200 bg-white">
-      <div className="mx-auto flex min-h-18 max-w-[1600px] items-center justify-between gap-3 px-3 py-2 sm:min-h-22 sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
+    <>
+      <header className="sticky top-0 z-1000 border-b border-slate-200 bg-white">
+        <div className="mx-auto flex min-h-18 max-w-[1600px] items-center justify-between gap-3 px-3 py-2 sm:min-h-22 sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
 
-        {/* LOGO AND BRAND */}
+          {/* LOGO AND BRAND */}
 
-        <button
-          type="button"
-          onClick={onGoHome}
-          className="flex min-w-0 items-center gap-3 text-left"
-          aria-label="Go to Home"
-        >
-          <div className="relative h-12 w-12 shrink-0 sm:h-16 sm:w-16">
-            <Image
-              src="/images/twd-logo.jpg"
-              alt="Tanza Water District official logo"
-              fill
-              sizes="64px"
-              className="object-contain"
-              priority
-            />
-          </div>
-
-          <div className="min-w-0">
-            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 sm:text-xs">
-              Tanza Water District
-            </p>
-
-            <p className="mt-0.5 truncate text-lg font-bold tracking-tight text-[#123D73] sm:text-xl">
-              DistrictLens
-            </p>
-
-            <p className="hidden text-[11px] text-slate-500 sm:block">
-              Field Worker Portal
-            </p>
-          </div>
-        </button>
-
-        {/* USER PROFILE MENU */}
-
-        <div className="relative shrink-0">
           <button
             type="button"
-            onClick={() =>
-              setIsUserMenuOpen((current) => !current)
-            }
-            aria-expanded={isUserMenuOpen}
-            aria-haspopup="menu"
-            className="flex items-center gap-2 border border-slate-200 bg-white px-2 py-2 transition-colors hover:bg-slate-50 sm:gap-3 sm:px-3"
+            onClick={onGoHome}
+            className="flex min-w-0 items-center gap-3 text-left"
+            aria-label="Go to Home"
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center bg-[#E8EEF6] text-xs font-bold text-[#123D73]">
-              {initials}
-            </div>
-
-            <div className="hidden min-w-0 text-left sm:block">
-              <p className="max-w-45 truncate text-xs font-semibold text-slate-800">
-                {userName}
-              </p>
-
-              <p className="mt-0.5 text-[11px] text-slate-500">
-                Field Worker
-              </p>
-            </div>
-
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              className={`h-4 w-4 text-slate-500 transition-transform ${
-                isUserMenuOpen ? "rotate-180" : ""
-              }`}
-              aria-hidden="true"
-            >
-              <path
-                d="m6 9 6 6 6-6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            <div className="relative h-12 w-12 shrink-0 sm:h-16 sm:w-16">
+              <Image
+                src="/images/twd-logo.jpg"
+                alt="Tanza Water District official logo"
+                fill
+                sizes="64px"
+                className="object-contain"
+                priority
               />
-            </svg>
+            </div>
+
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 sm:text-xs">
+                Tanza Water District
+              </p>
+
+              <p className="mt-0.5 truncate text-lg font-bold tracking-tight text-[#123D73] sm:text-xl">
+                DistrictLens
+              </p>
+
+              <p className="hidden text-[11px] text-slate-500 sm:block">
+                Field Worker Portal
+              </p>
+            </div>
           </button>
 
-          {isUserMenuOpen && (
-            <>
-              <button
-                type="button"
-                aria-label="Close user menu"
-                onClick={() => setIsUserMenuOpen(false)}
-                className="fixed inset-0 z-1001 cursor-default"
-              />
+          {/* USER PROFILE MENU */}
 
-              <div
-                role="menu"
-                className="absolute right-0 top-[calc(100%+8px)] z-1002 w-64 border border-slate-200 bg-white shadow-lg"
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() =>
+                setIsUserMenuOpen((current) => !current)
+              }
+              aria-expanded={isUserMenuOpen}
+              aria-haspopup="menu"
+              className="flex items-center gap-2 border border-slate-200 bg-white px-2 py-2 transition-colors hover:bg-slate-50 sm:gap-3 sm:px-3"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center bg-[#E8EEF6] text-xs font-bold text-[#123D73]">
+                {initials}
+              </div>
+
+              <div className="hidden min-w-0 text-left sm:block">
+                <p className="max-w-45 truncate text-xs font-semibold text-slate-800">
+                  {userName}
+                </p>
+
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  Field Worker
+                </p>
+              </div>
+
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className={`h-4 w-4 text-slate-500 transition-transform ${
+                  isUserMenuOpen ? "rotate-180" : ""
+                }`}
+                aria-hidden="true"
               >
-                <div className="border-b border-slate-200 px-4 py-4">
-                  <p className="wrap-break-word text-sm font-semibold text-slate-800">
-                    {userName}
-                  </p>
+                <path
+                  d="m6 9 6 6 6-6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
 
-                  <p className="mt-1 text-xs text-slate-500">
-                    Field Worker
-                  </p>
+            {isUserMenuOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Close user menu"
+                  onClick={() => setIsUserMenuOpen(false)}
+                  className="fixed inset-0 z-1001 cursor-default"
+                />
 
-                  <p className="mt-2 text-[10px] uppercase tracking-wider text-slate-400">
-                    DistrictLens Field Portal
-                  </p>
+                <div
+                  role="menu"
+                  className="absolute right-0 top-[calc(100%+8px)] z-1002 w-64 border border-slate-200 bg-white shadow-lg"
+                >
+                  <div className="border-b border-slate-200 px-4 py-4">
+                    <p className="wrap-break-word text-sm font-semibold text-slate-800">
+                      {userName}
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-500">
+                      Field Worker
+                    </p>
+
+                    <p className="mt-2 text-[10px] uppercase tracking-wider text-slate-400">
+                      DistrictLens Field Portal
+                    </p>
+                  </div>
+
+                  <div className="p-2">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setLogoutStep("confirm");
+                      }}
+                      className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-red-50 hover:text-red-700"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        className="h-5 w-5"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M10 17l5-5-5-5M15 12H3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M13 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+        </div>
+      </header>
+
+      {/* LOGOUT POPUPS */}
+
+      {logoutStep !== "closed" && (
+        <div
+          className="fixed inset-0 z-1100 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
+          role="presentation"
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="logout-title"
+            aria-describedby="logout-message"
+            className="w-full max-w-md border border-[#DCD6FF] bg-white p-6 shadow-2xl sm:p-8"
+          >
+            {logoutStep === "confirm" ? (
+              <>
+                {/* Big question mark */}
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#EEEAFE] text-[#5145B5]">
+                  <span
+                    aria-hidden="true"
+                    className="text-4xl font-bold leading-none"
+                  >
+                    ?
+                  </span>
                 </div>
 
-                <div className="p-2">
+                <h2
+                  id="logout-title"
+                  className="mt-5 text-center text-xl font-bold text-[#27205C]"
+                >
+                  Log out?
+                </h2>
+
+                <p
+                  id="logout-message"
+                  className="mt-2 text-center text-sm leading-6 text-slate-600"
+                >
+                  Are you sure you want to log out of DistrictLens?
+                </p>
+
+                <div className="mt-6 grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    role="menuitem"
-                    onClick={handleLogout}
-                    className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-red-50 hover:text-red-700"
+                    onClick={() => setLogoutStep("closed")}
+                    disabled={isLoggingOut}
+                    className="border border-[#D9D4EE] px-4 py-3 text-sm font-semibold text-[#5145B5] transition hover:bg-indigo-50 disabled:opacity-50"
                   >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      className="h-5 w-5"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M10 17l5-5-5-5M15 12H3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M13 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                    Cancel
+                  </button>
 
-                    Logout
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className="bg-linear-to-r from-[#342992] to-[#5366C8] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+                  >
+                    {isLoggingOut ? "Logging out..." : "Yes, log out"}
                   </button>
                 </div>
-              </div>
-            </>
-          )}
-        </div>
+              </>
+            ) : (
+              <>
+                {/* Check mark */}
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#EEEAFE] text-[#5145B5]">
+                  <svg
+                    className="h-9 w-9"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="m5 12.5 4.5 4.5L19 7.5"
+                    />
+                  </svg>
+                </div>
 
-      </div>
-    </header>
+                <h2
+                  id="logout-title"
+                  className="mt-5 text-center text-xl font-bold text-[#27205C]"
+                >
+                  Logged out successfully
+                </h2>
+
+                <p
+                  id="logout-message"
+                  className="mt-2 text-center text-sm leading-6 text-slate-600"
+                >
+                  You have been logged out. Redirecting to the login page...
+                </p>
+
+                <div className="mt-6">
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="w-full bg-linear-to-r from-[#342992] to-[#5366C8] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
+                  >
+                    Go to Login
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

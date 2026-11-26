@@ -33,6 +33,36 @@ function NavIcon({ children }: { children: ReactNode }) {
   );
 }
 
+// The bold is set on the label itself (not on the button), the same way the
+// Header does it, so a font-weight rule on "button" in portal.css cannot
+// override it. An invisible bold copy reserves the wider size, so the tabs
+// next to it do not move when the label gets bolder.
+function TabLabel({
+  children,
+  active,
+}: {
+  children: ReactNode;
+  active: boolean;
+}) {
+  return (
+    <span className="inline-grid">
+      <span
+        aria-hidden="true"
+        className="invisible col-start-1 row-start-1 font-bold"
+      >
+        {children}
+      </span>
+      <span
+        className={`col-start-1 row-start-1 text-center transition-colors duration-300 ease-in-out group-hover:font-bold group-focus-visible:font-bold ${
+          active ? "font-bold" : "font-medium"
+        }`}
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
 const links: { id: Section; label: string; icon: ReactNode }[] = [
   {
     id: "home",
@@ -186,14 +216,14 @@ export default function PublicNavigation({
                     type="button"
                     onClick={() => select(link.id)}
                     aria-current={isActive ? "page" : undefined}
-                    className={`flex min-h-12 w-full items-center gap-3 border-l-[3px] px-5 text-left text-sm transition-colors ${
+                    className={`group flex min-h-12 w-full items-center gap-3 border-l-[3px] px-5 text-left text-sm transition-colors duration-300 ease-in-out ${
                       isActive
-                        ? "border-[#123D73] bg-slate-50 font-bold text-[#123D73]"
-                        : "border-transparent font-medium text-slate-700 hover:bg-slate-50 hover:text-[#123D73]"
+                        ? "border-[#123D73] bg-slate-50 text-[#123D73]"
+                        : "border-transparent text-slate-700 hover:bg-slate-50 hover:text-[#123D73]"
                     }`}
                   >
                     <span className="shrink-0">{link.icon}</span>
-                    {link.label}
+                    <TabLabel active={isActive}>{link.label}</TabLabel>
                   </button>
                 </li>
               );
@@ -213,14 +243,14 @@ export default function PublicNavigation({
               type="button"
               onClick={() => setActiveSection(link.id)}
               aria-current={isActive ? "page" : undefined}
-              className={`relative flex min-h-14 shrink-0 items-center gap-2 border-b-[3px] px-4 text-sm font-semibold transition-colors ${
+              className={`group relative flex min-h-14 shrink-0 items-center gap-2 whitespace-nowrap border-b-[3px] px-4 text-sm transition-colors duration-300 ease-in-out ${
                 isActive
                   ? "border-[#123D73] bg-slate-50 text-[#123D73]"
                   : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-[#123D73]"
               }`}
             >
               <span className="shrink-0">{link.icon}</span>
-              {link.label}
+              <TabLabel active={isActive}>{link.label}</TabLabel>
             </button>
           );
         })}

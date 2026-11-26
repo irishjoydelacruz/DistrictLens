@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useAlerts } from "./alert-provider";
@@ -14,8 +15,9 @@ import { Icon } from "./icons";
 // Phone: three equal columns, 44px tall so they are easy to tap.
 // Tablet and up: each button takes its own natural width, 40px tall.
 // Full labels show on large screens (lg); shorter ones below that.
+// "group" lets the label bold itself when the button is hovered or focused.
 const actionBase =
-  "inline-flex min-h-11 w-full items-center justify-center gap-2 whitespace-nowrap border px-2 text-sm font-semibold sm:min-h-10 sm:w-auto sm:px-4 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 motion-safe:hover:-translate-y-0.5";
+  "group inline-flex min-h-11 w-full items-center justify-center gap-2 whitespace-nowrap border px-2 text-sm font-semibold sm:min-h-10 sm:w-auto sm:px-4 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 motion-safe:hover:-translate-y-0.5";
 
 // Solid
 const reportAction =
@@ -66,9 +68,35 @@ function LockIcon({ className = "size-4" }: { className?: string }) {
   );
 }
 
+// Bolds the label on hover/focus like the admin tabs, without changing the
+// button width: an invisible bold copy reserves the wider size.
+function HoverBold({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={className}>
+      <span
+        aria-hidden="true"
+        className="invisible col-start-1 row-start-1 font-bold"
+      >
+        {children}
+      </span>
+      <span className="col-start-1 row-start-1 text-center group-hover:font-bold group-focus-visible:font-bold">
+        {children}
+      </span>
+    </span>
+  );
+}
+
 export default function Header() {
   const { openAlerts, alertsEnabled } = useAlerts();
   const { openSubmitReport } = useSubmitReport();
+
+  const alertsLabel = alertsEnabled ? "Manage Alerts" : "Get Barangay Alerts";
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
@@ -115,8 +143,10 @@ export default function Header() {
             className={`${actionBase} ${reportAction}`}
           >
             <PencilIcon />
-            <span className="hidden lg:inline">Submit Report</span>
-            <span className="lg:hidden">Report</span>
+            <HoverBold className="hidden lg:inline-grid">
+              Submit Report
+            </HoverBold>
+            <HoverBold className="inline-grid lg:hidden">Report</HoverBold>
           </button>
 
           <button
@@ -127,16 +157,16 @@ export default function Header() {
             className={`${actionBase} ${alertsAction}`}
           >
             <Icon name="bell" className="size-4" />
-            <span className="hidden lg:inline">
-              {alertsEnabled ? "Manage Alerts" : "Get Barangay Alerts"}
-            </span>
-            <span className="lg:hidden">Alerts</span>
+            <HoverBold className="hidden lg:inline-grid">
+              {alertsLabel}
+            </HoverBold>
+            <HoverBold className="inline-grid lg:hidden">Alerts</HoverBold>
           </button>
 
           <Link href="/login" className={`${actionBase} ${loginAction}`}>
             <LockIcon />
-            <span className="hidden lg:inline">Staff Login</span>
-            <span className="lg:hidden">Login</span>
+            <HoverBold className="hidden lg:inline-grid">Staff Login</HoverBold>
+            <HoverBold className="inline-grid lg:hidden">Login</HoverBold>
           </Link>
         </div>
       </div>

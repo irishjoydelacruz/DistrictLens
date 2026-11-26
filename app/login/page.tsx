@@ -18,6 +18,9 @@ const labelClass = "mb-1.5 block text-sm font-semibold text-slate-800";
 const btnPrimary =
   "w-full rounded-xl bg-[#123D73] px-4 py-3 text-sm font-bold uppercase tracking-[0.12em] text-white transition hover:bg-[#0D2F59] disabled:cursor-not-allowed disabled:opacity-50";
 
+// How long the success popup stays before going to the next page.
+const SUCCESS_REDIRECT_MS = 1800;
+
 const QUERY_ERRORS: Record<string, string> = {
   profile: "Unable to verify your account. Please sign in again.",
   role: "Your account does not have a valid role.",
@@ -39,6 +42,8 @@ function LoginForm() {
     QUERY_ERRORS[searchParams.get("error") ?? ""] ?? ""
   );
   const [loading, setLoading] = useState(false);
+  // Set after a successful login: shows the success popup, then goes here.
+  const [redirectTo, setRedirectTo] = useState<string | null>(null);
 
   const noticeParam = searchParams.get("notice");
   const notice =
@@ -53,6 +58,17 @@ function LoginForm() {
   useEffect(() => {
     setYear(new Date().getFullYear());
   }, []);
+
+  // After the success popup has been shown for a moment, go to the next page.
+  useEffect(() => {
+    if (!redirectTo) return;
+
+    const timer = window.setTimeout(() => {
+      window.location.href = redirectTo;
+    }, SUCCESS_REDIRECT_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [redirectTo]);
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -109,13 +125,13 @@ function LoginForm() {
 
       // Step 3: Temporary password: change it first
       if (result.mustChangePassword === true) {
-        window.location.href = "/change-password";
+        setRedirectTo("/change-password");
         return;
       }
 
       // Step 4: Send the user to their own workspace
       if (result.role === "field_worker") {
-        window.location.href = "/worker";
+        setRedirectTo("/worker");
         return;
       }
 
@@ -123,7 +139,7 @@ function LoginForm() {
         result.role === "super_admin" ||
         result.role === "customer_service"
       ) {
-        window.location.href = "/admin";
+        setRedirectTo("/admin");
         return;
       }
 
@@ -152,6 +168,92 @@ function LoginForm() {
 
   return (
     <div className="min-h-dvh w-full bg-white">
+      <style jsx>{`
+        @keyframes successPop {
+          0% {
+            opacity: 0;
+            transform: scale(0.72);
+          }
+          70% {
+            opacity: 1;
+            transform: scale(1.08);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        .success-pop {
+          animation: successPop 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .success-pop {
+            animation: none;
+          }
+        }
+      `}</style>
+
+      {/* LOGIN SUCCESS POPUP */}
+      {redirectTo && (
+        <div
+          className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="login-success-title"
+          aria-describedby="login-success-message"
+        >
+          <div className="success-pop w-full max-w-md rounded-2xl border border-slate-300 bg-white p-6 text-center shadow-2xl sm:p-8">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+              <svg
+                className="h-12 w-12"
+                viewBox="0 0 48 48"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="24"
+                  cy="24"
+                  r="21"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                />
+                <path
+                  d="m13 24 7 7 15-16"
+                  stroke="currentColor"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+
+            <h2
+              id="login-success-title"
+              className="mt-5 text-2xl font-bold text-[#123D73]"
+            >
+              Login Successful
+            </h2>
+
+            <p
+              id="login-success-message"
+              className="mt-2 text-base leading-6 text-slate-600"
+            >
+              You have been signed in. Redirecting you now...
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = redirectTo;
+              }}
+              className={`${btnPrimary} mt-6`}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* HEADER: logo and button both go back to the public portal */}
       <header className="sticky top-0 z-50 h-16 w-full border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-full w-full max-w-[1700px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
@@ -456,7 +558,7 @@ function LoginForm() {
                 {/* LOGIN BUTTON */}
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || redirectTo !== null}
                   className={`${btnPrimary} cursor-pointer shadow-md transition-all hover:brightness-110`}
                 >
                   {loading ? "Logging in..." : "LOGIN"}

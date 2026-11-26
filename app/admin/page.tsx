@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { logActivity } from "@/lib/activity-log";
@@ -18,8 +19,44 @@ import UserManagement from "./modules/user-management";
 import ActivityLog from "./modules/activity-log";
 import BackToTop from "@/app/(public)/components/back-to-top";
 
-export default function AdminPage() {
-  const [activeSection, setActiveSection] = useState("dashboard");
+const sections = [
+  "dashboard",
+  "create-report",
+  "customer-reports",
+  "submissions",
+  "assignments",
+  "analytics",
+  "users",
+  "activity-log",
+];
+
+function parseSection(value: string | null): string {
+  return value && sections.includes(value) ? value : "dashboard";
+}
+
+// Keep the address bar in sync with the open section so a reload opens the
+// same section. Dashboard keeps a clean URL.
+function updateUrl(section: string, replace = false) {
+  const query = section === "dashboard" ? "" : `?section=${section}`;
+  const url = `${window.location.pathname}${query}`;
+
+  if (url === `${window.location.pathname}${window.location.search}`) return;
+
+  if (replace) {
+    window.history.replaceState(null, "", url);
+  } else {
+    window.history.pushState(null, "", url);
+  }
+}
+
+function AdminPortal() {
+  // Opened by URL, e.g. /admin?section=customer-reports, or after a reload.
+  const searchParams = useSearchParams();
+  const requestedSection = searchParams.get("section");
+
+  const [activeSection, setActiveSection] = useState(
+    parseSection(requestedSection),
+  );
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [userName, setUserName] = useState("Administrator");
   const [userRole, setUserRole] = useState("Admin");
@@ -31,6 +68,11 @@ export default function AdminPage() {
   const [reportPrefill, setReportPrefill] =
     useState<CustomerReportPrefill | null>(null);
   const clearReportPrefill = useCallback(() => setReportPrefill(null), []);
+  // Logout popups: confirmation first, then the success message.
+  const [logoutStep, setLogoutStep] = useState<
+    "closed" | "confirm" | "success"
+  >("closed");
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   /* LOAD CURRENT USER */
 
@@ -94,11 +136,13 @@ export default function AdminPage() {
           setUserRole(formattedRole);
 
           if (profile.role !== "super_admin") {
-            setActiveSection((current) =>
-              current === "users" || current === "activity-log"
-                ? "dashboard"
-                : current
-            );
+            setActiveSection((current) => {
+              if (current === "users" || current === "activity-log") {
+                updateUrl("dashboard", true);
+                return "dashboard";
+              }
+              return current;
+            });
           }
         }
       } catch (error) {
@@ -163,6 +207,37 @@ export default function AdminPage() {
     };
   }, []);
 
+  /* URL SYNC */
+
+  // The URL changed from outside this component, so show the section it
+  // asks for.
+  useEffect(() => {
+    setActiveSection(parseSection(requestedSection));
+  }, [requestedSection]);
+
+  // Browser Back and Forward buttons.
+  useEffect(() => {
+    const onPopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      setActiveSection(parseSection(params.get("section")));
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  /* LOGOUT SUCCESS: GO TO LOGIN AFTER A MOMENT */
+
+  useEffect(() => {
+    if (logoutStep !== "success") return;
+
+    const timer = window.setTimeout(() => {
+      window.location.href = "/login";
+    }, 2000);
+
+    return () => window.clearTimeout(timer);
+  }, [logoutStep]);
+
   /* SECTION CHANGE */
 
   function handleSectionChange(section: string) {
@@ -174,12 +249,16 @@ export default function AdminPage() {
     }
 
     setActiveSection(section);
+    updateUrl(section);
     setIsUserMenuOpen(false);
   }
 
   /* LOGOUT */
 
   async function handleLogout() {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+
     const supabase = createClient();
 
     // Log first: after signOut there is no session, so RLS would block it.
@@ -189,13 +268,15 @@ export default function AdminPage() {
     });
 
     const { error } = await supabase.auth.signOut();
+    setIsLoggingOut(false);
 
     if (error) {
       console.error("Logout error:", error);
+      setLogoutStep("closed");
       return;
     }
 
-    window.location.href = "/login";
+    setLogoutStep("success");
   }
 
   return (
@@ -313,7 +394,10 @@ export default function AdminPage() {
                     <button
                       type="button"
                       role="menuitem"
-                      onClick={handleLogout}
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setLogoutStep("confirm");
+                      }}
                       className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-red-50 hover:text-red-700"
                     >
                       <svg
@@ -443,9 +527,128 @@ export default function AdminPage() {
         </div>
       </footer>
 
+      {/* LOGOUT POPUPS */}
+
+      {logoutStep !== "closed" && (
+        <div
+          className="fixed inset-0 z-1100 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
+          role="presentation"
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="logout-title"
+            aria-describedby="logout-message"
+            className="w-full max-w-md border border-[#DCD6FF] bg-white p-6 shadow-2xl sm:p-8"
+          >
+            {logoutStep === "confirm" ? (
+              <>
+                {/* Big question mark */}
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#EEEAFE] text-[#5145B5]">
+                  <span
+                    aria-hidden="true"
+                    className="text-4xl font-bold leading-none"
+                  >
+                    ?
+                  </span>
+                </div>
+
+                <h2
+                  id="logout-title"
+                  className="mt-5 text-center text-xl font-bold text-[#27205C]"
+                >
+                  Log out?
+                </h2>
+
+                <p
+                  id="logout-message"
+                  className="mt-2 text-center text-sm leading-6 text-slate-600"
+                >
+                  Are you sure you want to log out of DistrictLens?
+                </p>
+
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setLogoutStep("closed")}
+                    disabled={isLoggingOut}
+                    className="border border-[#D9D4EE] px-4 py-3 text-sm font-semibold text-[#5145B5] transition hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className="bg-linear-to-r from-[#342992] to-[#5366C8] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+                  >
+                    {isLoggingOut ? "Logging out..." : "Yes, log out"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Check mark */}
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#EEEAFE] text-[#5145B5]">
+                  <svg
+                    className="h-9 w-9"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="m5 12.5 4.5 4.5L19 7.5"
+                    />
+                  </svg>
+                </div>
+
+                <h2
+                  id="logout-title"
+                  className="mt-5 text-center text-xl font-bold text-[#27205C]"
+                >
+                  Logged out successfully
+                </h2>
+
+                <p
+                  id="logout-message"
+                  className="mt-2 text-center text-sm leading-6 text-slate-600"
+                >
+                  You have been logged out. Redirecting to the login page...
+                </p>
+
+                <div className="mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href = "/login";
+                    }}
+                    className="w-full bg-linear-to-r from-[#342992] to-[#5366C8] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
+                  >
+                    Go to Login
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* BACK TO TOP */}
 
       <BackToTop />
     </div>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminPortal />
+    </Suspense>
   );
 }
