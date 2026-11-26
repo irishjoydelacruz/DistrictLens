@@ -1016,10 +1016,12 @@ export default function FrequentIncidents() {
         </div>
       )}
 
-      {/* PERIOD FILTER */}
+      {/* PERIOD FILTER
+          Stacked on phones AND tablets (the 5 buttons need the full width);
+          side by side only from the `lg` breakpoint up. */}
       <section className="border border-slate-300 bg-white p-4 sm:p-8">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
             <p className="text-base font-bold text-slate-800">Period</p>
             <p className="mt-1 text-sm text-slate-500 sm:text-base">
               {period === "recent"
@@ -1028,11 +1030,11 @@ export default function FrequentIncidents() {
             </p>
           </div>
 
-          {/* Scrolls sideways on phones so it stays on one line */}
+          {/* Scrolls sideways on small screens so it stays on one line */}
           <div
             role="group"
             aria-label="Select period"
-            className="-mx-1 flex overflow-x-auto px-1 sm:mx-0 sm:overflow-visible sm:px-0"
+            className="-mx-1 flex overflow-x-auto px-1 lg:mx-0 lg:overflow-visible lg:px-0"
           >
             {PERIOD_OPTIONS.map((option) => {
               const active = period === option.value;

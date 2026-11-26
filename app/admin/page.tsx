@@ -14,6 +14,7 @@ import CustomerReports, {
 import FrequentIncidents from "./modules/frequent-incidents";
 import Deployment from "./modules/deployment";
 import UserManagement from "./modules/user-management";
+import BackToTop from "@/app/(public)/components/back-to-top";
 
 export default function AdminPage() {
   const [activeSection, setActiveSection] = useState("dashboard");
@@ -423,6 +424,10 @@ export default function AdminPage() {
           </p>
         </div>
       </footer>
+
+      {/* BACK TO TOP */}
+
+      <BackToTop />
     </div>
   );
 }

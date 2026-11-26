@@ -18,6 +18,7 @@ import {
   LoaderCircle,
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
 } from "lucide-react";
 
 type UserRole =
@@ -75,6 +76,14 @@ const inputBase =
   "w-full rounded-none border border-slate-300 bg-white text-sm text-slate-800 shadow-sm placeholder:text-slate-400 transition-colors focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20";
 const labelClass = "mb-1.5 block text-sm font-bold text-slate-800";
 
+// Same size for every role / status badge so the columns line up.
+const badgeBase =
+  "inline-flex h-8 w-fit min-w-40 items-center justify-center gap-1.5 whitespace-nowrap border px-3 text-sm font-medium";
+
+// Square icon buttons (same size everywhere).
+const iconBtn =
+  "flex h-9 w-9 items-center justify-center border transition";
+
 function isUserRole(value: unknown): value is UserRole {
   return (
     value === "super_admin" ||
@@ -106,6 +115,9 @@ export default function UserManagement({
   const [filterRole, setFilterRole] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [page, setPage] = useState(1);
+
+  // UI only: role / status filters are collapsed by default on phones.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [editingUser, setEditingUser] =
     useState<ManagedUser | null>(null);
@@ -449,6 +461,58 @@ export default function UserManagement({
     return teams.find((team) => team.id === id)?.name ?? null;
   }
 
+  // Role badge text + color. A field team shows its team in the same
+  // badge, e.g. "Field Team: Team Bravo".
+  function getRoleBadge(user: ManagedUser): {
+    label: string;
+    className: string;
+  } {
+    if (user.status === "approved" && user.role) {
+      const team =
+        user.role === "field_worker" ? teamName(user.teamId) : null;
+
+      return {
+        label: team
+          ? `${roleLabels[user.role]}: ${team}`
+          : roleLabels[user.role],
+        className: roleColors[user.role],
+      };
+    }
+
+    return {
+      label: "No role assigned",
+      className: "border-slate-300 bg-slate-100 text-slate-600",
+    };
+  }
+
+  // Account status badge (text, color, and whether to show a dot).
+  function getStatusBadge(user: ManagedUser): {
+    label: string;
+    className: string;
+    dot: string | null;
+  } {
+    if (user.status !== "approved") {
+      return {
+        label:
+          user.status === "pending" ? "Pending approval" : "Rejected",
+        className: statusColors[user.status],
+        dot: null,
+      };
+    }
+
+    return user.mustChangePassword
+      ? {
+          label: "Change Required",
+          className: "border-amber-200 bg-amber-50 text-amber-800",
+          dot: "bg-amber-500",
+        }
+      : {
+          label: "Active",
+          className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+          dot: "bg-emerald-600",
+        };
+  }
+
   const teamOptions = teams.map((team) => ({
     value: team.id,
     label: team.name,
@@ -503,44 +567,92 @@ export default function UserManagement({
     (user) => user.status === "pending"
   ).length;
 
+  // UI only: number of active filters, shown on the mobile Filters button.
+  const activeFilterCount = [
+    filterRole !== "all",
+    filterStatus !== "all",
+  ].filter(Boolean).length;
+
   // Approve needs a role, and a team when the role is Field Team
   const approveMissingRole = approveRole === "";
   const approveMissingTeam =
     approveRole === "field_worker" && !approveTeamId;
 
+  // Action buttons, shared by the table and the mobile cards.
+  function renderActions(user: ManagedUser, withLabels: boolean) {
+    const fullWidth = withLabels ? "flex-1 gap-2 text-sm font-medium" : "";
+
+    return (
+      <>
+        {user.status !== "approved" ? (
+          <button
+            type="button"
+            onClick={() => openApproveDialog(user)}
+            aria-label={`Review ${user.fullName || "this user"}`}
+            title="Approve or reject"
+            className={`${iconBtn} ${fullWidth} border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}
+          >
+            <UserCheck size={16} />
+            {withLabels && "Review"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => openEditForm(user)}
+            aria-label={`Edit ${user.fullName || "this user"}`}
+            title="Edit user"
+            className={`${iconBtn} ${fullWidth} border-slate-300 bg-white text-slate-600 hover:border-[#123D73] hover:bg-blue-50 hover:text-[#123D73]`}
+          >
+            <Pencil size={16} />
+            {withLabels && "Edit"}
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => handleDelete(user)}
+          aria-label={`Delete ${user.fullName || "this user"}`}
+          title="Delete user"
+          className={`${iconBtn} ${fullWidth} border-slate-300 bg-white text-slate-600 hover:border-red-300 hover:bg-red-50 hover:text-red-600`}
+        >
+          <Trash2 size={16} />
+          {withLabels && "Delete"}
+        </button>
+      </>
+    );
+  }
+
   return (
-    <div className="space-y-8 border border-[#4438A8] bg-white p-6 text-slate-900 sm:p-8">
+    <div className="space-y-4 border border-[#4438A8] bg-white p-3 text-slate-900 sm:space-y-8 sm:p-8">
       {/* Page Header */}
-      <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-6 py-6 sm:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-bold text-indigo-100">
+      <div className="border border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8] px-4 py-4 sm:px-8 sm:py-6">
+        <div className="flex items-start justify-between gap-3 sm:items-center">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-indigo-100 sm:text-sm">
               DistrictLens / Administration
             </p>
 
-            <h2 className="mt-2 text-2xl font-bold text-white">
+            <h2 className="mt-1 text-xl font-bold text-white sm:mt-2 sm:text-2xl">
               User Management
             </h2>
 
-            <p className="mt-2 text-base text-indigo-100">
+            <p className="mt-2 hidden text-base text-indigo-100 sm:block">
               Approve new accounts and manage their assigned roles.
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => void loadUsers()}
-              disabled={loading}
-              className="inline-flex items-center justify-center gap-2 border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 disabled:opacity-50"
-            >
-              <RefreshCw
-                size={16}
-                className={loading ? "animate-spin" : ""}
-              />
-              Refresh
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => void loadUsers()}
+            disabled={loading}
+            className="inline-flex shrink-0 items-center justify-center gap-2 border border-white/30 bg-white/10 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 disabled:opacity-50 sm:px-4 sm:py-2.5"
+          >
+            <RefreshCw
+              size={16}
+              className={loading ? "animate-spin" : ""}
+            />
+            Refresh
+          </button>
         </div>
       </div>
 
@@ -594,7 +706,10 @@ export default function UserManagement({
 
           <button
             type="button"
-            onClick={() => setFilterStatus("pending")}
+            onClick={() => {
+              setFilterStatus("pending");
+              setFiltersOpen(true);
+            }}
             className="border border-amber-400 bg-white px-3 py-1.5 font-semibold text-amber-900 hover:bg-amber-100"
           >
             Show pending
@@ -602,20 +717,20 @@ export default function UserManagement({
         </div>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Summary Cards: 2 x 2 on phones, one row on wide screens */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="border border-slate-300 bg-white p-6 sm:p-7"
+              className="border border-slate-300 bg-white p-4 sm:p-7"
             >
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex-1">
-                  <Skeleton className="h-4 w-1/2" />
-                  <Skeleton className="mt-3 h-10 w-1/3" />
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="mt-3 h-8 w-1/3 sm:h-10" />
                 </div>
-                <Skeleton className="h-12 w-12 shrink-0" />
+                <Skeleton className="hidden h-12 w-12 shrink-0 sm:block" />
               </div>
             </div>
           ))
@@ -653,57 +768,88 @@ export default function UserManagement({
       </div>
 
       {/* Search + Filter */}
-      <section className="border border-slate-300 bg-white p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-          <div className="flex-1">
-            <label htmlFor="user-search" className={labelClass}>
-              Search
-            </label>
+      <section className="border border-slate-300 bg-white p-4 sm:p-6">
+        <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-end">
+          <div className="flex items-end gap-2 lg:contents">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="user-search" className={labelClass}>
+                Search
+              </label>
 
-            <div className="relative">
-              <Search
-                size={17}
-                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+              <div className="relative">
+                <Search
+                  size={17}
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  id="user-search"
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search by name or email"
+                  className={`${inputBase} py-2.5 pl-10 pr-3`}
+                />
+              </div>
+            </div>
+
+            {/* Phone / tablet only: show or hide the role and status filters */}
+            <button
+              type="button"
+              aria-expanded={filtersOpen}
+              aria-controls="user-filters"
+              onClick={() => setFiltersOpen((open) => !open)}
+              className="flex h-10.5 shrink-0 items-center gap-2 border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:border-[#123D73] focus:outline-none focus:ring-2 focus:ring-[#123D73]/20 lg:hidden"
+            >
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="bg-[#123D73] px-1.5 text-xs font-semibold leading-5 text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+              <ChevronDown
+                size={16}
+                className={`shrink-0 text-slate-500 transition-transform ${
+                  filtersOpen ? "rotate-180" : ""
+                }`}
               />
+            </button>
+          </div>
 
-              <input
-                id="user-search"
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search by name or email"
-                className={`${inputBase} py-2.5 pl-10 pr-3`}
+          <div
+            id="user-filters"
+            className={`${
+              filtersOpen ? "grid" : "hidden"
+            } grid-cols-2 gap-3 lg:contents`}
+          >
+            <div className="min-w-0 lg:w-56">
+              <label htmlFor="role-filter" className={labelClass}>
+                Role
+              </label>
+
+              <Dropdown
+                id="role-filter"
+                value={filterRole}
+                onChange={setFilterRole}
+                options={[
+                  { value: "all", label: "All Roles" },
+                  ...roleOptions,
+                ]}
               />
             </div>
-          </div>
 
-          <div className="w-full lg:w-56">
-            <label htmlFor="role-filter" className={labelClass}>
-              Role
-            </label>
+            <div className="min-w-0 lg:w-56">
+              <label htmlFor="status-filter" className={labelClass}>
+                Status
+              </label>
 
-            <Dropdown
-              id="role-filter"
-              value={filterRole}
-              onChange={setFilterRole}
-              options={[
-                { value: "all", label: "All Roles" },
-                ...roleOptions,
-              ]}
-            />
-          </div>
-
-          <div className="w-full lg:w-56">
-            <label htmlFor="status-filter" className={labelClass}>
-              Status
-            </label>
-
-            <Dropdown
-              id="status-filter"
-              value={filterStatus}
-              onChange={setFilterStatus}
-              options={statusOptions}
-            />
+              <Dropdown
+                id="status-filter"
+                value={filterStatus}
+                onChange={setFilterStatus}
+                options={statusOptions}
+              />
+            </div>
           </div>
         </div>
 
@@ -727,18 +873,31 @@ export default function UserManagement({
         </div>
       </section>
 
-      {/* User Accounts Table */}
+      {/* User Accounts */}
       <section className="overflow-hidden border border-[#4438A8] bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-190 text-left [&_td]:border-r [&_td]:border-slate-200 [&_th]:border-r [&_th]:border-white/20 [&_td:last-child]:border-r-0 [&_th:last-child]:border-r-0">
+        {/* Desktop table (laptops and wider) */}
+        <div className="hidden lg:block">
+          <table className="w-full table-fixed text-left [&_td]:border-r [&_td]:border-slate-200 [&_th]:border-r [&_th]:border-white/20 [&_td:last-child]:border-r-0 [&_th:last-child]:border-r-0">
+            {/* User, Role and Status share the width equally; Actions is only
+                as wide as its two buttons (w-32 = 80px buttons + padding) */}
+            <colgroup>
+              <col />
+              <col />
+              <col />
+              <col className="w-32" />
+            </colgroup>
             <thead className="border-b border-[#4438A8] bg-linear-to-r from-[#241C70] via-[#342992] to-[#5366C8]">
               <tr className="text-xs uppercase tracking-wide text-indigo-50">
-                <th className="px-6 py-3.5 font-semibold">User</th>
-                <th className="px-6 py-3.5 font-semibold">Role</th>
-                <th className="px-6 py-3.5 font-semibold">
+                <th className="px-6 py-3.5 text-left font-semibold">
+                  User
+                </th>
+                <th className="px-6 py-3.5 text-center font-semibold">
+                  Role
+                </th>
+                <th className="px-6 py-3.5 text-center font-semibold">
                   Account Status
                 </th>
-                <th className="px-6 py-3.5 text-right font-semibold">
+                <th className="px-6 py-3.5 text-left font-semibold">
                   Actions
                 </th>
               </tr>
@@ -748,7 +907,7 @@ export default function UserManagement({
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-3.5">
                       <div className="flex items-center gap-3">
                         <Skeleton className="h-10 w-10 shrink-0" />
                         <div>
@@ -758,16 +917,16 @@ export default function UserManagement({
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <Skeleton className="h-6 w-28" />
+                    <td className="px-4 py-3.5">
+                      <Skeleton className="h-8 w-32" />
                     </td>
 
-                    <td className="px-6 py-4">
-                      <Skeleton className="h-6 w-28" />
+                    <td className="px-4 py-3.5">
+                      <Skeleton className="h-8 w-32" />
                     </td>
 
-                    <td className="px-6 py-4">
-                      <div className="flex justify-end gap-2">
+                    <td className="px-4 py-3.5">
+                      <div className="flex gap-2">
                         <Skeleton className="h-9 w-9" />
                         <Skeleton className="h-9 w-9" />
                       </div>
@@ -792,150 +951,183 @@ export default function UserManagement({
                   </td>
                 </tr>
               ) : (
-                pagedUsers.map((user) => (
-                  <tr
-                    key={user.id}
-                    className={`transition hover:bg-slate-50 ${
-                      user.status === "pending" ? "bg-amber-50/60" : ""
-                    }`}
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-slate-100 font-bold text-[#123D73]">
-                          {(user.fullName || "?")
-                            .charAt(0)
-                            .toUpperCase()}
-                        </div>
+                pagedUsers.map((user) => {
+                  const roleBadge = getRoleBadge(user);
+                  const statusBadge = getStatusBadge(user);
 
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">
-                            {user.fullName || "Unnamed User"}
-                          </p>
+                  return (
+                    <tr
+                      key={user.id}
+                      className={`align-middle transition hover:bg-slate-50 ${
+                        user.status === "pending" ? "bg-amber-50/60" : ""
+                      }`}
+                    >
+                      {/* User */}
+                      <td className="px-6 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-slate-100 font-bold text-[#123D73]">
+                            {(user.fullName || "?")
+                              .charAt(0)
+                              .toUpperCase()}
+                          </div>
 
-                          {user.email ? (
-                            <p className="mt-0.5 text-xs text-slate-500">
-                              {user.email}
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold leading-5 text-slate-900">
+                              {user.fullName || "Unnamed User"}
                             </p>
-                          ) : (
-                            <p className="mt-0.5 text-xs font-medium text-amber-700">
-                              No email set. Edit to add one.
-                            </p>
-                          )}
 
-                          <p className="mt-0.5 font-mono text-xs text-slate-500">
-                            ID: {user.id.slice(0, 8)}...
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      {user.status === "approved" && user.role ? (
-                        <>
-                          <span
-                            className={`inline-flex whitespace-nowrap border px-2 py-0.5 text-xs font-medium ${
-                              roleColors[user.role]
-                            }`}
-                          >
-                            {roleLabels[user.role]}
-                          </span>
-
-                          {user.role === "field_worker" &&
-                            teamName(user.teamId) && (
-                              <span className="ml-2 text-xs text-slate-500">
-                                {teamName(user.teamId)}
-                              </span>
+                            {user.email ? (
+                              <p className="break-all text-xs leading-5 text-slate-500">
+                                {user.email}
+                              </p>
+                            ) : (
+                              <p className="text-xs font-medium leading-5 text-amber-700">
+                                No email set. Edit to add one.
+                              </p>
                             )}
-                        </>
-                      ) : (
-                        <span className="inline-flex whitespace-nowrap border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                          No role assigned
-                        </span>
-                      )}
-                    </td>
 
-                    <td className="px-6 py-4">
-                      {user.status !== "approved" ? (
+                            <p className="font-mono text-xs leading-5 text-slate-500">
+                              ID: {user.id.slice(0, 8)}...
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Role */}
+                      <td className="px-6 py-3.5 text-center">
                         <span
-                          className={`inline-flex whitespace-nowrap border px-2 py-0.5 text-xs font-medium ${
-                            statusColors[user.status]
-                          }`}
+                          className={`${badgeBase} ${roleBadge.className}`}
                         >
-                          {user.status === "pending"
-                            ? "Pending approval"
-                            : "Rejected"}
+                          {roleBadge.label}
                         </span>
-                      ) : (
+                      </td>
+
+                      {/* Account status */}
+                      <td className="px-6 py-3.5 text-center">
                         <span
-                          className={`inline-flex items-center gap-1.5 whitespace-nowrap border px-2 py-0.5 text-xs font-medium ${
-                            user.mustChangePassword
-                              ? "border-amber-200 bg-amber-50 text-amber-800"
-                              : "border-emerald-200 bg-emerald-50 text-emerald-800"
-                          }`}
+                          className={`${badgeBase} ${statusBadge.className}`}
                         >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              user.mustChangePassword
-                                ? "bg-amber-500"
-                                : "bg-emerald-600"
-                            }`}
-                          />
-
-                          {user.mustChangePassword
-                            ? "Change Required"
-                            : "Active"}
+                          {statusBadge.dot && (
+                            <span
+                              className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusBadge.dot}`}
+                            />
+                          )}
+                          {statusBadge.label}
                         </span>
-                      )}
-                    </td>
+                      </td>
 
-                    <td className="px-6 py-4">
-                      <div className="flex justify-end gap-2">
-                        {user.status !== "approved" && (
-                          <button
-                            type="button"
-                            onClick={() => openApproveDialog(user)}
-                            aria-label={`Review ${
-                              user.fullName || "this user"
-                            }`}
-                            title="Approve or reject"
-                            className="border border-emerald-300 bg-emerald-50 p-2 text-emerald-700 transition hover:bg-emerald-100"
-                          >
-                            <UserCheck size={16} />
-                          </button>
-                        )}
-
-                        {user.status === "approved" && (
-                          <button
-                            type="button"
-                            onClick={() => openEditForm(user)}
-                            aria-label={`Edit ${
-                              user.fullName || "this user"
-                            }`}
-                            title="Edit user"
-                            className="border border-slate-300 bg-white p-2 text-slate-600 transition hover:border-[#123D73] hover:bg-blue-50 hover:text-[#123D73]"
-                          >
-                            <Pencil size={16} />
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(user)}
-                          aria-label={`Delete ${
-                            user.fullName || "this user"
-                          }`}
-                          title="Delete user"
-                          className="border border-slate-300 bg-white p-2 text-slate-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      {/* Actions */}
+                      <td className="px-6 py-3.5">
+                        <div className="flex gap-2">
+                          {renderActions(user, false)}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Card list for phones AND tablets (replaces the table below lg) */}
+        <div className="divide-y divide-slate-300 lg:hidden">
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-3 p-4">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 shrink-0" />
+                  <div className="flex-1">
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="mt-2 h-3 w-2/3" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-8 w-28" />
+                  <Skeleton className="h-8 w-24" />
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-10 flex-1" />
+                  <Skeleton className="h-10 flex-1" />
+                </div>
+              </div>
+            ))
+          ) : filteredUsers.length === 0 ? (
+            <div className="px-4 py-12 text-center">
+              <Users size={30} className="mx-auto text-slate-300" />
+
+              <p className="mt-3 text-sm font-medium text-slate-900">
+                No accounts found
+              </p>
+
+              <p className="mt-1 text-sm text-slate-500">
+                Try changing your search or filter.
+              </p>
+            </div>
+          ) : (
+            pagedUsers.map((user) => {
+              const roleBadge = getRoleBadge(user);
+              const statusBadge = getStatusBadge(user);
+
+              return (
+                <article
+                  key={user.id}
+                  className={`p-4 ${
+                    user.status === "pending" ? "bg-amber-50/60" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 bg-slate-100 font-bold text-[#123D73]">
+                      {(user.fullName || "?").charAt(0).toUpperCase()}
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-5 text-slate-900">
+                        {user.fullName || "Unnamed User"}
+                      </p>
+
+                      {user.email ? (
+                        <p className="break-all text-xs leading-5 text-slate-500">
+                          {user.email}
+                        </p>
+                      ) : (
+                        <p className="text-xs font-medium leading-5 text-amber-700">
+                          No email set. Edit to add one.
+                        </p>
+                      )}
+
+                      <p className="font-mono text-xs leading-5 text-slate-500">
+                        ID: {user.id.slice(0, 8)}...
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span
+                      className={`${badgeBase} ${roleBadge.className}`}
+                    >
+                      {roleBadge.label}
+                    </span>
+
+                    <span
+                      className={`${badgeBase} ${statusBadge.className}`}
+                    >
+                      {statusBadge.dot && (
+                        <span
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusBadge.dot}`}
+                        />
+                      )}
+                      {statusBadge.label}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex gap-2">
+                    {renderActions(user, true)}
+                  </div>
+                </article>
+              );
+            })
+          )}
         </div>
 
         {!loading && (
@@ -946,7 +1138,6 @@ export default function UserManagement({
             onPageChange={setPage}
           />
         )}
-
       </section>
 
       {/* Edit User Modal */}
@@ -1318,19 +1509,22 @@ function SummaryCard({
   accent: string;
 }) {
   return (
-    <div className="relative border border-slate-300 bg-white p-6 sm:p-7">
+    <div className="relative border border-slate-300 bg-white p-4 sm:p-7">
       <div className={`absolute inset-x-0 top-0 h-0.5 ${accent}`} />
 
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold text-slate-800">{title}</p>
+      <div className="flex items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <p className="text-sm font-bold leading-5 text-slate-800">
+            {title}
+          </p>
 
-          <p className="mt-3 text-4xl font-bold text-slate-900">
+          <p className="mt-2 text-3xl font-bold text-slate-900 sm:mt-3 sm:text-4xl">
             {count}
           </p>
         </div>
 
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-slate-200 bg-slate-50 text-[#123D73]">
+        {/* The icon is hidden on small phones so the title has room */}
+        <div className="hidden h-12 w-12 shrink-0 items-center justify-center border border-slate-200 bg-slate-50 text-[#123D73] min-[420px]:flex">
           {icon}
         </div>
       </div>
@@ -1584,11 +1778,11 @@ function Pagination({
   const to = Math.min(page * pageSize, total);
 
   const btn =
-    "border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
+    "border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4";
 
   return (
-    <div className="flex flex-col gap-3 border-t border-slate-300 bg-slate-50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-      <p className="text-sm text-slate-600">
+    <div className="flex flex-col gap-2 border-t border-slate-300 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-8 sm:py-4">
+      <p className="text-center text-sm text-slate-600 sm:text-left">
         Showing{" "}
         <span className="font-semibold text-slate-900">
           {from}–{to}
@@ -1596,7 +1790,7 @@ function Pagination({
         of <span className="font-semibold text-slate-900">{total}</span>
       </p>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 sm:justify-end">
         <button
           type="button"
           disabled={page <= 1}
@@ -1606,7 +1800,7 @@ function Pagination({
           Previous
         </button>
 
-        <span className="px-3 text-sm font-semibold text-slate-700">
+        <span className="px-1 text-sm font-semibold text-slate-700 sm:px-3">
           Page {page} of {totalPages}
         </span>
 
